@@ -1,6 +1,7 @@
 const STORAGE_KEY = "sora_json_prompt_history_v1_3";
 const API_KEY_STORAGE = "sora_gemini_api_key";
 const SAMPLE_LYRICS_STORAGE = "sora_musicvideo_sample_lyrics_v1";
+const SAMPLE_SCRIPT_STORAGE = "sora_script_sample_v1";
 const STYLE_SAMPLE_STORAGE = "sora_musicvideo_style_samples_v1";
 const STYLE_PROMPT_STORAGE = "sora_musicvideo_style_prompts_v1";
 const COLUMN_RATIO_STORAGE = "sora_layout_left_col_ratio_v1";
@@ -25,6 +26,8 @@ const el = {
   referenceInputArea: document.getElementById("referenceInputArea"),
   musicVideoInputArea: document.getElementById("musicVideoInputArea"),
   scriptInput: document.getElementById("scriptInput"),
+  saveSampleScriptBtn: document.getElementById("saveSampleScriptBtn"),
+  loadSampleScriptBtn: document.getElementById("loadSampleScriptBtn"),
   scriptFontSizeRange: document.getElementById("scriptFontSizeRange"),
   scriptFontSizeLabel: document.getElementById("scriptFontSizeLabel"),
   scriptHeightRange: document.getElementById("scriptHeightRange"),
@@ -295,6 +298,8 @@ function init() {
     }
     if (el.saveSampleLyricsBtn) el.saveSampleLyricsBtn.addEventListener("click", saveSampleLyrics);
     if (el.loadSampleLyricsBtn) el.loadSampleLyricsBtn.addEventListener("click", loadSampleLyrics);
+    if (el.saveSampleScriptBtn) el.saveSampleScriptBtn.addEventListener("click", saveSampleScript);
+    if (el.loadSampleScriptBtn) el.loadSampleScriptBtn.addEventListener("click", loadSampleScript);
     if (el.generateBtn) el.generateBtn.addEventListener("click", onGenerate);
     if (el.generateMusicKfBtn) el.generateMusicKfBtn.addEventListener("click", onGenerateMusicKf);
     if (el.generateMusicJsonBtn) el.generateMusicJsonBtn.addEventListener("click", onGenerateMusicJson);
@@ -329,6 +334,7 @@ function init() {
     updateScriptMetrics();
     autoGrowScriptInput();
     updateSampleLyricsButtons();
+    updateSampleScriptButtons();
     renderMusicStyleGallery();
     syncMusicStyleGallerySelection();
     renderSelectedStyleThumbnail();
@@ -2072,6 +2078,31 @@ function saveSampleLyrics() {
   flashButtonCopied(el.saveSampleLyricsBtn, "샘플가사 등록");
 }
 
+function saveSampleScript() {
+  const script = (el.scriptInput?.value || "").trim();
+  if (!script) {
+    alert("등록할 대본을 먼저 입력하세요.");
+    return;
+  }
+
+  safeStorageSet(SAMPLE_SCRIPT_STORAGE, script);
+  updateSampleScriptButtons();
+  flashButtonCopied(el.saveSampleScriptBtn, "샘플대본 등록");
+}
+
+function loadSampleScript() {
+  const saved = safeStorageGet(SAMPLE_SCRIPT_STORAGE);
+  if (!saved) {
+    alert("등록된 샘플대본이 없습니다.");
+    return;
+  }
+
+  if (el.scriptInput) {
+    el.scriptInput.value = saved;
+  }
+  updateScriptMetrics();
+}
+
 function loadSampleLyrics() {
   const saved = safeStorageGet(SAMPLE_LYRICS_STORAGE);
   if (!saved) {
@@ -2089,6 +2120,13 @@ function updateSampleLyricsButtons() {
   const hasSample = !!safeStorageGet(SAMPLE_LYRICS_STORAGE);
   if (el.loadSampleLyricsBtn) {
     el.loadSampleLyricsBtn.disabled = !hasSample;
+  }
+}
+
+function updateSampleScriptButtons() {
+  const hasSample = !!safeStorageGet(SAMPLE_SCRIPT_STORAGE);
+  if (el.loadSampleScriptBtn) {
+    el.loadSampleScriptBtn.disabled = !hasSample;
   }
 }
 
