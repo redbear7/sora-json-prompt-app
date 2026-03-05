@@ -19,6 +19,7 @@ const IMAGE_MODEL_NAME = "nanobanana2";
 
 const el = {
   appTitle: document.getElementById("appTitle"),
+  accessPathInfo: document.getElementById("accessPathInfo"),
   scriptTab: document.getElementById("scriptTab"),
   referenceTab: document.getElementById("referenceTab"),
   musicVideoTab: document.getElementById("musicVideoTab"),
@@ -329,6 +330,7 @@ function init() {
     const savedKey = safeStorageGet(API_KEY_STORAGE);
     if (savedKey && el.apiKeyInput) el.apiKeyInput.value = savedKey;
     renderCurrentGeminiModelLabel();
+    renderAccessPathInfo();
 
     setInputMode("script");
     updateScriptMetrics();
@@ -1324,6 +1326,16 @@ function renderCurrentGeminiModelLabel() {
   }
   const hasKey = !!getSavedGeminiApiKey();
   setGeminiLampStatus(hasKey ? "configured" : "off");
+}
+
+function renderAccessPathInfo() {
+  if (!el.accessPathInfo) return;
+  const proto = window.location.protocol || "";
+  const host = window.location.host || "";
+  const href = window.location.href || "";
+  const isLocal = proto === "file:" || /^localhost(?::\d+)?$/i.test(host) || /^127\.0\.0\.1(?::\d+)?$/.test(host);
+  const mode = isLocal ? "로컬(Local)" : "홈페이지(Web)";
+  el.accessPathInfo.textContent = `접속: ${mode} | ${href}`;
 }
 
 function setGeminiLampStatus(status, detail = "") {

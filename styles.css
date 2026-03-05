@@ -118,6 +118,13 @@ body {
   gap: 6px;
 }
 
+.access-path-info {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
 .title-progress {
   margin-top: 2px;
   padding: 6px 10px;
