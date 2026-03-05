@@ -144,6 +144,63 @@ h3 { font-size: 0.95rem; color: var(--muted); margin-top: 16px; }
   flex-wrap: wrap;
 }
 
+.api-key-block {
+  display: grid;
+  gap: 6px;
+  min-width: 320px;
+}
+
+.api-model-info {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0d1525;
+  padding: 7px 10px;
+}
+
+.api-status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.model-line {
+  margin-top: 4px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.status-lamp {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid #1f2d43;
+  background: #516071;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3) inset;
+}
+
+.status-lamp.checking {
+  background: #f0c24b;
+  box-shadow: 0 0 8px rgba(240, 194, 75, 0.55);
+}
+
+.status-lamp.ok {
+  background: #37d39a;
+  box-shadow: 0 0 8px rgba(55, 211, 154, 0.6);
+}
+
+.status-lamp.error {
+  background: #e35d5d;
+  box-shadow: 0 0 8px rgba(227, 93, 93, 0.6);
+}
+
+.status-lamp.off {
+  background: #6f7f92;
+  box-shadow: none;
+}
+
 input, select, textarea, .btn {
   border-radius: 10px;
   border: 1px solid var(--line);
@@ -164,8 +221,9 @@ textarea {
 }
 
 #scriptInput {
-  min-height: 140px;
-  resize: vertical;
+  min-height: 220px;
+  height: 360px;
+  resize: none;
   overflow: auto;
 }
 

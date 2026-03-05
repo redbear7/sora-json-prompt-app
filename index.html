@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sora JSON Prompt App</title>
-  <link rel="stylesheet" href="./styles.css?v=20260305-3" />
+  <link rel="stylesheet" href="./styles.css?v=20260305-6" />
 </head>
 <body>
   <div class="bg-layer"></div>
@@ -19,7 +19,16 @@
         <a class="btn ghost" href="https://claude.ai/project/019ca98b-a8ea-771e-a2c9-bb0b449dd257" target="_blank" rel="noopener noreferrer">클로드</a>
         <a class="btn ghost" href="https://nosorawm.app/" target="_blank" rel="noopener noreferrer">워터마크</a>
         <a class="btn ghost" href="https://bylo.ai/features/sora-2-watermark-remover" target="_blank" rel="noopener noreferrer">워터마크 2</a>
-        <input id="apiKeyInput" type="password" placeholder="Gemini API Key" />
+        <div class="api-key-block">
+          <input id="apiKeyInput" type="password" placeholder="Gemini API Key" />
+          <div class="api-model-info">
+            <div class="api-status-line">
+              <span id="geminiLamp" class="status-lamp off" aria-hidden="true"></span>
+              <span id="geminiStatusText">Gemini Status: Off</span>
+            </div>
+            <div id="modelNamesText" class="model-line">Text Model: gemini-3.0-flash | Image Model: nanobanana2</div>
+          </div>
+        </div>
         <button id="saveApiKeyBtn" class="btn ghost">API Key Save</button>
         <button id="resetBtn" class="btn ghost danger">Reset</button>
       </div>
@@ -47,6 +56,9 @@
         <label for="scriptFontSizeRange">스크립트 폰트 크기</label>
         <input id="scriptFontSizeRange" type="range" min="12" max="28" step="1" value="16" />
         <span id="scriptFontSizeLabel">16px</span>
+        <label for="scriptHeightRange">대본 입력창 높이</label>
+        <input id="scriptHeightRange" type="range" min="220" max="1000" step="10" value="360" />
+        <span id="scriptHeightLabel">360px</span>
       </div>
       <div class="tabs">
         <button id="scriptTab" class="tab active" data-mode="script">Script</button>
@@ -151,10 +163,10 @@
       </div>
 
       <div class="action-row">
-        <button id="generateBtn" class="btn primary">Generate Storyboard</button>
-        <button id="generateMusicKfBtn" class="btn hidden">MV KF 생성</button>
-        <button id="generateMusicJsonBtn" class="btn hidden">MV JSON 생성</button>
-        <button id="copyJsonBtn" class="btn">JSON COPY</button>
+        <button id="generateBtn" type="button" class="btn primary">Generate Storyboard</button>
+        <button id="generateMusicKfBtn" type="button" class="btn hidden">MV KF 생성</button>
+        <button id="generateMusicJsonBtn" type="button" class="btn hidden">MV JSON 생성</button>
+        <button id="copyJsonBtn" type="button" class="btn">JSON COPY</button>
       </div>
         </section>
 
@@ -191,6 +203,6 @@
     </div>
   </main>
 
-  <script src="./app.js?v=20260305-17"></script>
+  <script src="./app.js?v=20260305-21"></script>
 </body>
 </html>

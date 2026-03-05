@@ -5,6 +5,9 @@ const STYLE_SAMPLE_STORAGE = "sora_musicvideo_style_samples_v1";
 const STYLE_PROMPT_STORAGE = "sora_musicvideo_style_prompts_v1";
 const COLUMN_RATIO_STORAGE = "sora_layout_left_col_ratio_v1";
 const SCRIPT_FONT_SIZE_STORAGE = "sora_script_font_size_v1";
+const SCRIPT_HEIGHT_STORAGE = "sora_script_input_height_v1";
+const GEMINI_TEXT_MODEL = "gemini-3.0-flash";
+const IMAGE_MODEL_NAME = "nanobanana2";
 
 const el = {
   appTitle: document.getElementById("appTitle"),
@@ -17,6 +20,8 @@ const el = {
   scriptInput: document.getElementById("scriptInput"),
   scriptFontSizeRange: document.getElementById("scriptFontSizeRange"),
   scriptFontSizeLabel: document.getElementById("scriptFontSizeLabel"),
+  scriptHeightRange: document.getElementById("scriptHeightRange"),
+  scriptHeightLabel: document.getElementById("scriptHeightLabel"),
   musicLyricsInput: document.getElementById("musicLyricsInput"),
   musicSynopsisInput: document.getElementById("musicSynopsisInput"),
   musicStyleSelect: document.getElementById("musicStyleSelect"),
@@ -70,6 +75,9 @@ const el = {
   columnRatioRange: document.getElementById("columnRatioRange"),
   columnRatioLabel: document.getElementById("columnRatioLabel"),
   apiKeyInput: document.getElementById("apiKeyInput"),
+  geminiLamp: document.getElementById("geminiLamp"),
+  geminiStatusText: document.getElementById("geminiStatusText"),
+  modelNamesText: document.getElementById("modelNamesText"),
   saveApiKeyBtn: document.getElementById("saveApiKeyBtn"),
   resetBtn: document.getElementById("resetBtn")
 };
@@ -85,7 +93,8 @@ const appState = {
   styleSampleImages: loadStyleSampleImages(),
   styleSamplePrompts: loadStyleSamplePrompts(),
   leftColRatio: loadColumnRatio(),
-  scriptFontSize: loadScriptFontSize()
+  scriptFontSize: loadScriptFontSize(),
+  scriptInputHeight: loadScriptInputHeight()
 };
 
 function safeStorageGet(key) {
@@ -164,6 +173,12 @@ function loadScriptFontSize() {
   return 16;
 }
 
+function loadScriptInputHeight() {
+  const raw = Number(safeStorageGet(SCRIPT_HEIGHT_STORAGE));
+  if (Number.isFinite(raw) && raw >= 220 && raw <= 1000) return raw;
+  return 360;
+}
+
 function applyScriptFontSize(size, persist = true) {
   const px = Math.max(12, Math.min(28, Number(size) || 16));
   if (el.scriptInput) el.scriptInput.style.fontSize = `${px}px`;
@@ -172,6 +187,15 @@ function applyScriptFontSize(size, persist = true) {
   if (el.scriptFontSizeLabel) el.scriptFontSizeLabel.textContent = `${px}px`;
   appState.scriptFontSize = px;
   if (persist) safeStorageSet(SCRIPT_FONT_SIZE_STORAGE, String(px));
+}
+
+function applyScriptInputHeight(height, persist = true) {
+  const px = Math.max(220, Math.min(1000, Number(height) || 360));
+  if (el.scriptInput) el.scriptInput.style.height = `${px}px`;
+  if (el.scriptHeightRange) el.scriptHeightRange.value = String(px);
+  if (el.scriptHeightLabel) el.scriptHeightLabel.textContent = `${px}px`;
+  appState.scriptInputHeight = px;
+  if (persist) safeStorageSet(SCRIPT_HEIGHT_STORAGE, String(px));
 }
 
 window.addEventListener("error", (event) => {
@@ -202,11 +226,15 @@ function init() {
         updateScriptMetrics();
       });
       el.scriptInput.addEventListener("focus", expandScriptInputPreserveViewport);
-      el.scriptInput.addEventListener("blur", autoGrowScriptInput);
     }
     if (el.scriptFontSizeRange) {
       el.scriptFontSizeRange.addEventListener("input", () => {
         applyScriptFontSize(Number(el.scriptFontSizeRange.value || 16), true);
+      });
+    }
+    if (el.scriptHeightRange) {
+      el.scriptHeightRange.addEventListener("input", () => {
+        applyScriptInputHeight(Number(el.scriptHeightRange.value || 360), true);
       });
     }
     if (el.musicLyricsInput) el.musicLyricsInput.addEventListener("input", updateScriptMetrics);
@@ -275,6 +303,7 @@ function init() {
 
     const savedKey = safeStorageGet(API_KEY_STORAGE);
     if (savedKey && el.apiKeyInput) el.apiKeyInput.value = savedKey;
+    renderCurrentGeminiModelLabel();
 
     setInputMode("script");
     updateScriptMetrics();
@@ -286,6 +315,7 @@ function init() {
     toggleMusicStoryCustomInput();
     applyColumnRatio(appState.leftColRatio, false);
     applyScriptFontSize(appState.scriptFontSize, false);
+    applyScriptInputHeight(appState.scriptInputHeight, false);
     notifyGenerateBlocked("대기 중");
   } catch (e) {
     notifyGenerateBlocked(`초기화 오류: ${e?.message || "알 수 없음"}`);
@@ -479,7 +509,10 @@ async function onGenerate() {
     const musicAnalysis = analyzeMusicLyrics(musicLyricsText, musicStoryOption, musicStoryCustom);
     let synopsis = musicSynopsisInputText;
     if (!synopsis) {
-      synopsis = buildMusicVideoSynopsis(musicAnalysis, getMusicStylePreset(musicStyleKey).label);
+      synopsis = await generateMusicSynopsisWithGemini(
+        musicAnalysis,
+        getMusicStylePreset(musicStyleKey).label
+      ) || buildMusicVideoSynopsis(musicAnalysis, getMusicStylePreset(musicStyleKey).label);
       if (el.musicSynopsisInput) el.musicSynopsisInput.value = synopsis;
     }
     renderMusicSynopsisOnly(synopsis, musicAnalysis.displayLyrics || musicLyricsText);
@@ -542,10 +575,11 @@ async function onGenerate() {
       scriptAnalysis,
       musicAnalysis
     });
-    appState.lastResult = result;
+    const enriched = await maybeEnhanceResultTextWithGemini(result);
+    appState.lastResult = enriched;
 
-    renderResult(result);
-    saveHistory(result);
+    renderResult(enriched);
+    saveHistory(enriched);
     saveCurrentTabState();
     renderHistory();
   } catch (e) {
@@ -609,7 +643,9 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
   const scriptAnalysis = analyzeScript("");
   const musicAnalysis = analyzeMusicLyrics(musicLyricsText, musicStoryOption, musicStoryCustom);
   const kfCount = musicAnalysis.kfCount;
-  const synopsisFinal = musicSynopsisInputText || buildMusicVideoSynopsis(musicAnalysis, musicStylePreset.label);
+  const synopsisFinal = musicSynopsisInputText
+    || await generateMusicSynopsisWithGemini(musicAnalysis, musicStylePreset.label)
+    || buildMusicVideoSynopsis(musicAnalysis, musicStylePreset.label);
   if (el.musicSynopsisInput && !musicSynopsisInputText) el.musicSynopsisInput.value = synopsisFinal;
 
   appState.isGenerating = true;
@@ -635,9 +671,10 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
       scriptAnalysis,
       musicAnalysis
     });
-    appState.lastResult = result;
-    renderResult(result, { showKf: !!generateKf, showJson: !!generateJson });
-    saveHistory(result);
+    const enriched = await maybeEnhanceResultTextWithGemini(result);
+    appState.lastResult = enriched;
+    renderResult(enriched, { showKf: !!generateKf, showJson: !!generateJson });
+    saveHistory(enriched);
     saveCurrentTabState();
     renderHistory();
   } catch (e) {
@@ -749,7 +786,9 @@ function buildResult({ inputMode, scriptText, musicLyricsText, musicStyleKey, mu
     meta: {
       version: "1.3",
       project_id: `proj_${now.getTime()}`,
-      created_at: now.toISOString()
+      created_at: now.toISOString(),
+      text_model: getSavedGeminiApiKey() ? GEMINI_TEXT_MODEL : "local-fallback",
+      image_model: IMAGE_MODEL_NAME
     },
     input: {
       input_mode: inputMode,
@@ -1172,17 +1211,21 @@ async function saveApiKey() {
   }
 
   if (!key) {
+    renderCurrentGeminiModelLabel();
     alert("API Key가 비워진 상태로 저장되었습니다.");
     return;
   }
 
+  setGeminiLampStatus("checking");
   notifyGenerateBlocked("Gemini API Key 점검 중...");
   const check = await validateGeminiApiKey(key);
   if (!check.ok) {
+    setGeminiLampStatus("error", String(check.message || ""));
     notifyGenerateBlocked(`Gemini API 오류: ${check.message}`);
     alert(`API Key 저장됨. Gemini API 오류: ${check.message}`);
     return;
   }
+  setGeminiLampStatus("ok");
   notifyGenerateBlocked("Gemini API 연결 정상");
   alert("API Key 저장 및 Gemini API 연결 확인 완료.");
 }
@@ -1196,7 +1239,7 @@ async function validateGeminiApiKey(apiKey) {
   const timer = setTimeout(() => controller.abort(), 9000);
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_TEXT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1229,6 +1272,203 @@ async function validateGeminiApiKey(apiKey) {
   }
 }
 
+function getSavedGeminiApiKey() {
+  return (el.apiKeyInput?.value || safeStorageGet(API_KEY_STORAGE) || "").trim();
+}
+
+function renderCurrentGeminiModelLabel() {
+  if (el.modelNamesText) {
+    el.modelNamesText.textContent = `Text Model: ${GEMINI_TEXT_MODEL} | Image Model: ${IMAGE_MODEL_NAME}`;
+  }
+  const hasKey = !!getSavedGeminiApiKey();
+  setGeminiLampStatus(hasKey ? "configured" : "off");
+}
+
+function setGeminiLampStatus(status, detail = "") {
+  if (!el.geminiLamp || !el.geminiStatusText) return;
+  el.geminiLamp.classList.remove("checking", "ok", "error", "off");
+
+  let lampClass = "off";
+  let statusText = "Gemini Status: Off";
+  if (status === "checking") {
+    lampClass = "checking";
+    statusText = "Gemini Status: Checking";
+  } else if (status === "ok") {
+    lampClass = "ok";
+    statusText = "Gemini Status: Active";
+  } else if (status === "error") {
+    lampClass = "error";
+    statusText = `Gemini Status: Error${detail ? ` (${detail})` : ""}`;
+  } else if (status === "configured") {
+    lampClass = "checking";
+    statusText = "Gemini Status: Configured (Not Checked)";
+  }
+
+  el.geminiLamp.classList.add(lampClass);
+  el.geminiStatusText.textContent = statusText;
+}
+
+async function geminiGenerateText({ prompt, inlineImageDataUrl = "" }) {
+  const apiKey = getSavedGeminiApiKey();
+  if (!apiKey) return "";
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_TEXT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const parts = [{ text: prompt }];
+    const inline = parseDataUrl(inlineImageDataUrl);
+    if (inline) {
+      parts.push({
+        inline_data: {
+          mime_type: inline.mimeType,
+          data: inline.base64
+        }
+      });
+    }
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: {
+          temperature: 0.35
+        }
+      }),
+      signal: controller.signal
+    });
+    if (!response.ok) return "";
+    const payload = await response.json();
+    const text = payload?.candidates?.[0]?.content?.parts
+      ?.map((p) => p?.text || "")
+      .join("\n")
+      .trim();
+    return text || "";
+  } catch (_e) {
+    return "";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function parseDataUrl(dataUrl) {
+  const raw = String(dataUrl || "").trim();
+  const match = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/i);
+  if (!match) return null;
+  return {
+    mimeType: match[1].toLowerCase(),
+    base64: match[2]
+  };
+}
+
+function extractJsonObjectFromText(text) {
+  const src = String(text || "").trim();
+  if (!src) return null;
+  const fenced = src.match(/```json\s*([\s\S]*?)```/i) || src.match(/```\s*([\s\S]*?)```/i);
+  const target = fenced ? fenced[1].trim() : src;
+  const first = target.indexOf("{");
+  const last = target.lastIndexOf("}");
+  if (first < 0 || last <= first) return null;
+  try {
+    return JSON.parse(target.slice(first, last + 1));
+  } catch (_e) {
+    return null;
+  }
+}
+
+async function generateMusicSynopsisWithGemini(musicAnalysis, styleLabel) {
+  if (!getSavedGeminiApiKey()) return "";
+  const prompt = [
+    "당신은 뮤직비디오 감독이다.",
+    "한국어로 300자 미만 시놉시스를 1개 작성하라.",
+    "옵션과 가사를 반영하고, 구성 설명보다 스토리 중심으로 작성하라.",
+    `스타일: ${styleLabel || "-"}`,
+    `스토리옵션: ${musicAnalysis?.storyLabelKo || "-"}`,
+    `직접입력스토리: ${musicAnalysis?.storyCustomKo || "-"}`,
+    "가사:",
+    musicAnalysis?.displayLyrics || ""
+  ].join("\n");
+  const text = await geminiGenerateText({ prompt });
+  return truncateKorean(String(text || "").replace(/\s+/g, " ").trim(), 299);
+}
+
+async function maybeEnhanceResultTextWithGemini(result) {
+  if (!result || !getSavedGeminiApiKey()) {
+    return applyImageModelTag(result);
+  }
+
+  const promptPayload = {
+    mode: result?.input?.input_mode || "script",
+    script_ko: result?.directors_view?.script_ko || "",
+    synopsis_ko: result?.directors_view?.music_video_synopsis_ko || "",
+    story_option: result?.input?.music_story_option || "",
+    keyframes: (result?.keyframes || []).map((kf) => ({
+      frame_number: kf.frame_number,
+      source_text: kf.source_text || "",
+      lyric_text_ko: kf.lyric_text_ko || "",
+      actor_ids: kf.actor_ids || [],
+      shot_type: kf.shot_type || "",
+      camera_work_en: kf.camera_work_en || "",
+      lens_en: kf.lens_en || ""
+    }))
+  };
+
+  const prompt = [
+    "You are a film direction writer.",
+    "Return JSON only with this schema:",
+    "{\"main_line_ko\":\"...\",\"logline_en\":\"...\",\"music_video_synopsis_ko\":\"...\",\"keyframes\":[{\"frame_number\":1,\"actor_action_en\":\"...\",\"lighting_en\":\"...\",\"sound_en\":\"...\",\"image_prompt_en\":\"...\"}]}",
+    "Rules:",
+    "- Keep Korean fields in Korean.",
+    "- Keep technical fields in English.",
+    `- image_prompt_en must be pure image-generation prompt for model ${IMAGE_MODEL_NAME}.`,
+    "- Do not include storyboard words.",
+    "- Keep frame_number as-is.",
+    `Input JSON: ${JSON.stringify(promptPayload)}`
+  ].join("\n");
+
+  const text = await geminiGenerateText({ prompt });
+  const parsed = extractJsonObjectFromText(text);
+  if (!parsed || typeof parsed !== "object") {
+    return applyImageModelTag(result);
+  }
+
+  const next = JSON.parse(JSON.stringify(result));
+  next.directors_view = next.directors_view || {};
+  if (parsed.main_line_ko) next.directors_view.main_line_ko = String(parsed.main_line_ko).trim();
+  if (parsed.logline_en) next.directors_view.logline_en = String(parsed.logline_en).trim();
+  if (parsed.music_video_synopsis_ko && next.input?.input_mode === "musicvideo") {
+    next.directors_view.music_video_synopsis_ko = truncateKorean(String(parsed.music_video_synopsis_ko).replace(/\s+/g, " ").trim(), 299);
+  }
+
+  const map = new Map((parsed.keyframes || []).map((it) => [Number(it.frame_number), it]));
+  next.keyframes = (next.keyframes || []).map((kf) => {
+    const patch = map.get(Number(kf.frame_number));
+    if (!patch) return kf;
+    return {
+      ...kf,
+      actor_action_en: patch.actor_action_en ? String(patch.actor_action_en).trim() : kf.actor_action_en,
+      lighting_en: patch.lighting_en ? String(patch.lighting_en).trim() : kf.lighting_en,
+      sound_en: patch.sound_en ? String(patch.sound_en).trim() : kf.sound_en,
+      image_prompt_en: patch.image_prompt_en ? String(patch.image_prompt_en).trim() : kf.image_prompt_en
+    };
+  });
+
+  next.meta = next.meta || {};
+  next.meta.text_model = GEMINI_TEXT_MODEL;
+  next.meta.image_model = IMAGE_MODEL_NAME;
+  return applyImageModelTag(next);
+}
+
+function applyImageModelTag(result) {
+  if (!result) return result;
+  const next = result;
+  next.meta = next.meta || {};
+  if (!next.meta.image_model) next.meta.image_model = IMAGE_MODEL_NAME;
+  if (!next.meta.text_model) next.meta.text_model = getSavedGeminiApiKey() ? GEMINI_TEXT_MODEL : "local-fallback";
+  return next;
+}
+
 function resetAll() {
   el.scriptInput.value = "";
   if (el.musicLyricsInput) el.musicLyricsInput.value = "";
@@ -1241,6 +1481,8 @@ function resetAll() {
   appState.referenceImagePrompt = "";
   if (el.referencePrompt) el.referencePrompt.value = "";
   if (el.kfStyleInput) el.kfStyleInput.value = "";
+  if (el.apiKeyInput) el.apiKeyInput.value = safeStorageGet(API_KEY_STORAGE) || "";
+  renderCurrentGeminiModelLabel();
   updateReferencePreview();
   el.runtimeSelect.value = "15s";
   el.bgmToggle.checked = false;
@@ -2013,11 +2255,29 @@ async function refreshReferencePrompt() {
 }
 
 async function buildReferenceImagePrompt({ referenceImageDataUrl }) {
+  if (referenceImageDataUrl && getSavedGeminiApiKey()) {
+    const geminiPrompt = await buildReferencePromptWithGemini(referenceImageDataUrl);
+    if (geminiPrompt) return geminiPrompt;
+  }
   if (referenceImageDataUrl) {
     const analyzed = await analyzeImageDataUrl(referenceImageDataUrl);
     if (analyzed) return analyzed;
   }
   return "";
+}
+
+async function buildReferencePromptWithGemini(referenceImageDataUrl) {
+  const prompt = [
+    "Analyze this reference image for image generation.",
+    "Return one single-line prompt in English only.",
+    `Format: style | subject | location | composition | lighting | mood | color palette | detail level | model hint (${IMAGE_MODEL_NAME})`,
+    "No markdown. No numbering."
+  ].join("\n");
+  const text = await geminiGenerateText({
+    prompt,
+    inlineImageDataUrl: referenceImageDataUrl
+  });
+  return String(text || "").replace(/\s+/g, " ").trim();
 }
 
 async function analyzeImageDataUrl(dataUrl) {
@@ -2095,8 +2355,7 @@ function autoGrowTextarea() {
 function autoGrowScriptInput() {
   const t = el.scriptInput;
   if (!t) return;
-  t.style.height = "auto";
-  t.style.height = `${Math.max(140, t.scrollHeight)}px`;
+  applyScriptInputHeight(appState.scriptInputHeight || 360, false);
 }
 
 function setScriptInputCollapsed(collapsed) {
@@ -2300,7 +2559,7 @@ function renderKeyframeCards(result) {
 function buildKfImagePrompt({ frameNumber, total, shotType, cameraWork, lens, basePrompt, kfStyleNote, sourceText }) {
   const style = kfStyleNote ? `, style note: ${kfStyleNote}` : "";
   const source = sourceText ? `, scene cue: ${sourceText}` : "";
-  return `${basePrompt}, ${shotType} shot, ${cameraWork}, ${lens} lens${style}${source}, photorealistic image generation, high detail`;
+  return `${basePrompt}, ${shotType} shot, ${cameraWork}, ${lens} lens${style}${source}, pure image generation prompt for ${IMAGE_MODEL_NAME}, high detail`;
 }
 
 function bindKfCopyButtons() {
