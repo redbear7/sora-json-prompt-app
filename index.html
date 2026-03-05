@@ -4,15 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sora JSON Prompt App</title>
-  <link rel="stylesheet" href="./styles.css?v=20260305-6" />
+  <link rel="stylesheet" href="./styles.css?v=20260305-9" />
 </head>
 <body>
   <div class="bg-layer"></div>
   <main class="app-shell">
     <header class="app-header">
-      <div>
+      <div class="title-block">
         <p class="eyebrow">SORA JSON v1.3</p>
         <h1 id="appTitle">Director Storyboard Studio</h1>
+        <section class="progress-panel title-progress" id="progressPanel">
+          <p id="statusMessage">대기 중</p>
+          <div class="progress-track"><div id="progressBar" class="progress-fill"></div></div>
+        </section>
       </div>
       <div class="header-actions">
         <a class="btn ghost" href="https://sora.chatgpt.com/drafts" target="_blank" rel="noopener noreferrer">소라2 바로가기</a>
@@ -32,10 +36,6 @@
         <button id="saveApiKeyBtn" class="btn ghost">API Key Save</button>
         <button id="resetBtn" class="btn ghost danger">Reset</button>
       </div>
-      <section class="progress-panel header-progress" id="progressPanel">
-        <p id="statusMessage">대기 중</p>
-        <div class="progress-track"><div id="progressBar" class="progress-fill"></div></div>
-      </section>
     </header>
 
     <div class="app-two-col" id="appTwoCol">
@@ -181,6 +181,11 @@
         <textarea id="liveScriptEditor" rows="6" wrap="off"></textarea>
       </article>
 
+      <article id="jsonPanel" class="panel full">
+        <h2>JSON Data</h2>
+        <pre id="jsonOutput"></pre>
+      </article>
+
       <article id="keyframePanel" class="panel full">
         <div class="panel-head">
           <h2>Keyframes</h2>
@@ -193,16 +198,11 @@
         <div id="keyframeList" class="kframe-list"></div>
       </article>
 
-      <article id="jsonPanel" class="panel full">
-        <h2>JSON Data</h2>
-        <pre id="jsonOutput"></pre>
-      </article>
-
         </section>
       </div>
     </div>
   </main>
 
-  <script src="./app.js?v=20260305-21"></script>
+  <script src="./app.js?v=20260305-24"></script>
 </body>
 </html>

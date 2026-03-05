@@ -7,6 +7,13 @@ const COLUMN_RATIO_STORAGE = "sora_layout_left_col_ratio_v1";
 const SCRIPT_FONT_SIZE_STORAGE = "sora_script_font_size_v1";
 const SCRIPT_HEIGHT_STORAGE = "sora_script_input_height_v1";
 const GEMINI_TEXT_MODEL = "gemini-3.0-flash";
+const GEMINI_MODEL_STORAGE = "sora_gemini_active_model_v1";
+const GEMINI_FALLBACK_MODELS = [
+  GEMINI_TEXT_MODEL,
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash"
+];
 const IMAGE_MODEL_NAME = "nanobanana2";
 
 const el = {
@@ -94,7 +101,8 @@ const appState = {
   styleSamplePrompts: loadStyleSamplePrompts(),
   leftColRatio: loadColumnRatio(),
   scriptFontSize: loadScriptFontSize(),
-  scriptInputHeight: loadScriptInputHeight()
+  scriptInputHeight: loadScriptInputHeight(),
+  activeGeminiModel: loadGeminiActiveModel()
 };
 
 function safeStorageGet(key) {
@@ -177,6 +185,18 @@ function loadScriptInputHeight() {
   const raw = Number(safeStorageGet(SCRIPT_HEIGHT_STORAGE));
   if (Number.isFinite(raw) && raw >= 220 && raw <= 1000) return raw;
   return 360;
+}
+
+function loadGeminiActiveModel() {
+  const raw = String(safeStorageGet(GEMINI_MODEL_STORAGE) || "").trim();
+  if (!raw) return "";
+  return raw;
+}
+
+function saveGeminiActiveModel(modelName) {
+  const value = String(modelName || "").trim();
+  appState.activeGeminiModel = value;
+  safeStorageSet(GEMINI_MODEL_STORAGE, value);
 }
 
 function applyScriptFontSize(size, persist = true) {
@@ -787,7 +807,7 @@ function buildResult({ inputMode, scriptText, musicLyricsText, musicStyleKey, mu
       version: "1.3",
       project_id: `proj_${now.getTime()}`,
       created_at: now.toISOString(),
-      text_model: getSavedGeminiApiKey() ? GEMINI_TEXT_MODEL : "local-fallback",
+      text_model: getSavedGeminiApiKey() ? getCurrentGeminiModel() : "local-fallback",
       image_model: IMAGE_MODEL_NAME
     },
     input: {
@@ -1211,6 +1231,7 @@ async function saveApiKey() {
   }
 
   if (!key) {
+    saveGeminiActiveModel("");
     renderCurrentGeminiModelLabel();
     alert("API Key가 비워진 상태로 저장되었습니다.");
     return;
@@ -1225,9 +1246,11 @@ async function saveApiKey() {
     alert(`API Key 저장됨. Gemini API 오류: ${check.message}`);
     return;
   }
-  setGeminiLampStatus("ok");
+  saveGeminiActiveModel(check.model || GEMINI_TEXT_MODEL);
+  renderCurrentGeminiModelLabel();
+  setGeminiLampStatus("ok", check.model || GEMINI_TEXT_MODEL);
   notifyGenerateBlocked("Gemini API 연결 정상");
-  alert("API Key 저장 및 Gemini API 연결 확인 완료.");
+  alert(`API Key 저장 및 Gemini API 연결 확인 완료. 사용 모델: ${check.model || GEMINI_TEXT_MODEL}`);
 }
 
 async function validateGeminiApiKey(apiKey) {
@@ -1235,11 +1258,22 @@ async function validateGeminiApiKey(apiKey) {
     return { ok: false, message: "API Key가 비어 있습니다." };
   }
 
+  let lastError = "";
+  for (const model of GEMINI_FALLBACK_MODELS) {
+    const check = await probeGeminiModel(apiKey, model);
+    if (check.ok) {
+      return { ok: true, message: "OK", model };
+    }
+    lastError = check.message || lastError;
+  }
+  return { ok: false, message: lastError || "지원되는 Gemini Flash 모델을 찾지 못했습니다." };
+}
+
+async function probeGeminiModel(apiKey, modelName) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 9000);
-
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_TEXT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1248,19 +1282,15 @@ async function validateGeminiApiKey(apiKey) {
       }),
       signal: controller.signal
     });
-
     let payload = null;
     try {
       payload = await response.json();
     } catch (_e) {
       payload = null;
     }
-
     if (!response.ok) {
-      const msg = payload?.error?.message || `HTTP ${response.status}`;
-      return { ok: false, message: msg };
+      return { ok: false, message: payload?.error?.message || `HTTP ${response.status}` };
     }
-
     return { ok: true, message: "OK" };
   } catch (e) {
     if (e?.name === "AbortError") {
@@ -1276,9 +1306,15 @@ function getSavedGeminiApiKey() {
   return (el.apiKeyInput?.value || safeStorageGet(API_KEY_STORAGE) || "").trim();
 }
 
+function getCurrentGeminiModel() {
+  const saved = String(appState.activeGeminiModel || "").trim();
+  return saved || GEMINI_TEXT_MODEL;
+}
+
 function renderCurrentGeminiModelLabel() {
+  const currentModel = getCurrentGeminiModel();
   if (el.modelNamesText) {
-    el.modelNamesText.textContent = `Text Model: ${GEMINI_TEXT_MODEL} | Image Model: ${IMAGE_MODEL_NAME}`;
+    el.modelNamesText.textContent = `Text Model: ${currentModel} | Image Model: ${IMAGE_MODEL_NAME}`;
   }
   const hasKey = !!getSavedGeminiApiKey();
   setGeminiLampStatus(hasKey ? "configured" : "off");
@@ -1295,13 +1331,13 @@ function setGeminiLampStatus(status, detail = "") {
     statusText = "Gemini Status: Checking";
   } else if (status === "ok") {
     lampClass = "ok";
-    statusText = "Gemini Status: Active";
+    statusText = `Gemini Status: Active${detail ? ` (${detail})` : ""}`;
   } else if (status === "error") {
     lampClass = "error";
     statusText = `Gemini Status: Error${detail ? ` (${detail})` : ""}`;
   } else if (status === "configured") {
     lampClass = "checking";
-    statusText = "Gemini Status: Configured (Not Checked)";
+    statusText = `Gemini Status: Configured (${getCurrentGeminiModel()})`;
   }
 
   el.geminiLamp.classList.add(lampClass);
@@ -1312,10 +1348,30 @@ async function geminiGenerateText({ prompt, inlineImageDataUrl = "" }) {
   const apiKey = getSavedGeminiApiKey();
   if (!apiKey) return "";
 
+  const models = [getCurrentGeminiModel(), ...GEMINI_FALLBACK_MODELS].filter((v, i, arr) => v && arr.indexOf(v) === i);
+  for (const model of models) {
+    const text = await geminiGenerateTextWithModel({
+      apiKey,
+      modelName: model,
+      prompt,
+      inlineImageDataUrl
+    });
+    if (text) {
+      if (model !== appState.activeGeminiModel) {
+        saveGeminiActiveModel(model);
+        renderCurrentGeminiModelLabel();
+      }
+      return text;
+    }
+  }
+  return "";
+}
+
+async function geminiGenerateTextWithModel({ apiKey, modelName, prompt, inlineImageDataUrl = "" }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12000);
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_TEXT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const parts = [{ text: prompt }];
     const inline = parseDataUrl(inlineImageDataUrl);
     if (inline) {
@@ -1326,7 +1382,6 @@ async function geminiGenerateText({ prompt, inlineImageDataUrl = "" }) {
         }
       });
     }
-
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1455,7 +1510,7 @@ async function maybeEnhanceResultTextWithGemini(result) {
   });
 
   next.meta = next.meta || {};
-  next.meta.text_model = GEMINI_TEXT_MODEL;
+  next.meta.text_model = getCurrentGeminiModel();
   next.meta.image_model = IMAGE_MODEL_NAME;
   return applyImageModelTag(next);
 }
@@ -1465,7 +1520,7 @@ function applyImageModelTag(result) {
   const next = result;
   next.meta = next.meta || {};
   if (!next.meta.image_model) next.meta.image_model = IMAGE_MODEL_NAME;
-  if (!next.meta.text_model) next.meta.text_model = getSavedGeminiApiKey() ? GEMINI_TEXT_MODEL : "local-fallback";
+  if (!next.meta.text_model) next.meta.text_model = getSavedGeminiApiKey() ? getCurrentGeminiModel() : "local-fallback";
   return next;
 }
 

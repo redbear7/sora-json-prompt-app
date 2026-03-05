@@ -113,13 +113,27 @@ body {
   z-index: 20;
 }
 
-.header-progress {
-  width: 100%;
+.title-block {
+  display: grid;
+  gap: 6px;
+}
+
+.title-progress {
   margin-top: 2px;
-  padding: 10px 12px;
+  padding: 6px 10px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #0d1525;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-progress p {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .eyebrow {
@@ -142,6 +156,25 @@ h3 { font-size: 0.95rem; color: var(--muted); margin-top: 16px; }
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.header-actions > a.btn.ghost {
+  border-color: transparent;
+  text-decoration: none;
+  font-size: 0.88rem;
+  padding: 0;
+  min-height: 0;
+  line-height: 1.1;
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
+.header-actions > a.btn.ghost:hover,
+.header-actions > a.btn.ghost:focus,
+.header-actions > a.btn.ghost:visited {
+  text-decoration: none;
+  border-color: transparent;
 }
 
 .api-key-block {
@@ -324,6 +357,7 @@ label { display: grid; gap: 6px; font-size: 0.94rem; }
 .btn.copied { background: #27b36f; border-color: #27b36f; color: #052214; }
 
 .progress-panel p { margin: 0 0 8px; color: var(--muted); }
+.title-progress p { margin: 0; }
 .progress-track {
   width: 100%;
   height: 12px;
@@ -331,6 +365,12 @@ label { display: grid; gap: 6px; font-size: 0.94rem; }
   border-radius: 99px;
   border: 1px solid var(--line);
   overflow: hidden;
+}
+
+.title-progress .progress-track {
+  flex: 1;
+  min-width: 120px;
+  height: 10px;
 }
 .progress-fill {
   width: 0;
