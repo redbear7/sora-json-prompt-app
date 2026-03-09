@@ -271,6 +271,21 @@ textarea {
   margin-top: 8px;
 }
 
+.sample-script-status {
+  margin-top: 6px;
+  min-height: 1.2em;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.sample-script-status.ok {
+  color: var(--accent);
+}
+
+.sample-script-status.warn {
+  color: #f0c24b;
+}
+
 .reference-preview {
   width: min(420px, 100%);
   border: 1px solid var(--line);

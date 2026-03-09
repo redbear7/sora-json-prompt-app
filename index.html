@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sora JSON Prompt App</title>
-  <link rel="stylesheet" href="./styles.css?v=20260305-10" />
+  <link rel="stylesheet" href="./styles.css?v=20260309-1" />
 </head>
 <body>
   <div class="bg-layer"></div>
   <main class="app-shell">
     <header class="app-header">
       <div class="title-block">
-        <p class="eyebrow">SORA JSON v1.3</p>
+        <p class="eyebrow">SORA JSON v1.4</p>
         <h1 id="appTitle">Director Storyboard Studio</h1>
         <p id="accessPathInfo" class="access-path-info">접속: -</p>
         <section class="progress-panel title-progress" id="progressPanel">
@@ -74,6 +74,7 @@
           <button id="saveSampleScriptBtn" class="btn ghost" type="button">샘플 대본 저장</button>
           <button id="loadSampleScriptBtn" class="btn ghost" type="button">샘플 대본 불러오기</button>
         </div>
+        <div id="sampleScriptStatus" class="sample-script-status" aria-live="polite"></div>
         <div class="inline-meta">
           <span>글자수(공백 제외): <b id="charCount">0</b></span>
           <span>자동 KF: <b id="autoKfCount">6</b></span>
@@ -164,6 +165,7 @@
         <label class="toggle"><input id="bgmToggle" type="checkbox" /> BGM</label>
         <label class="toggle"><input id="vfxToggle" type="checkbox" /> VFX</label>
         <label class="toggle"><input id="sfxToggle" type="checkbox" /> SFX</label>
+        <label class="toggle"><input id="keyframesToggle" type="checkbox" checked /> Keyframes</label>
         <label class="toggle"><input id="contactSheetToggle" type="checkbox" /> Contact Sheet</label>
       </div>
 
@@ -208,6 +210,6 @@
     </div>
   </main>
 
-  <script src="./app.js?v=20260305-26"></script>
+  <script src="./app.js?v=20260309-1"></script>
 </body>
 </html>

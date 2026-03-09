@@ -37,6 +37,7 @@ const el = {
   scriptHeightLabel: document.getElementById("scriptHeightLabel"),
   saveSampleScriptBtn: document.getElementById("saveSampleScriptBtn"),
   loadSampleScriptBtn: document.getElementById("loadSampleScriptBtn"),
+  sampleScriptStatus: document.getElementById("sampleScriptStatus"),
   musicLyricsInput: document.getElementById("musicLyricsInput"),
   musicSynopsisInput: document.getElementById("musicSynopsisInput"),
   musicStyleSelect: document.getElementById("musicStyleSelect"),
@@ -64,6 +65,7 @@ const el = {
   bgmToggle: document.getElementById("bgmToggle"),
   vfxToggle: document.getElementById("vfxToggle"),
   sfxToggle: document.getElementById("sfxToggle"),
+  keyframesToggle: document.getElementById("keyframesToggle"),
   contactSheetToggle: document.getElementById("contactSheetToggle"),
   generateBtn: document.getElementById("generateBtn"),
   generateMusicKfBtn: document.getElementById("generateMusicKfBtn"),
@@ -107,6 +109,7 @@ const appState = {
   tabStates: createInitialTabStates(),
   styleSampleImages: loadStyleSampleImages(),
   styleSamplePrompts: loadStyleSamplePrompts(),
+  sampleScriptMemory: safeStorageGet(SAMPLE_SCRIPT_STORAGE) || "",
   leftColRatio: loadColumnRatio(),
   scriptFontSize: loadScriptFontSize(),
   scriptInputHeight: loadScriptInputHeight(),
@@ -255,6 +258,7 @@ function init() {
     if (el.appTitle) el.appTitle.addEventListener("click", resetToIdleMode);
     if (el.scriptInput) {
       el.scriptInput.addEventListener("input", () => {
+        sanitizeScriptInputInPlace();
         updateScriptMetrics();
       });
       el.scriptInput.addEventListener("focus", expandScriptInputPreserveViewport);
@@ -507,7 +511,7 @@ async function onGenerate() {
   saveSelectedStylePrompt();
 
   const inputMode = appState.inputMode;
-  let scriptText = el.scriptInput.value.trim();
+  let scriptText = sanitizeScriptNoise(String(el.scriptInput.value || "")).trim();
   const musicLyricsText = (el.musicLyricsInput?.value || "").trim();
   const musicSynopsisInputText = (el.musicSynopsisInput?.value || "").trim();
   const musicStyleKey = (el.musicStyleSelect?.value || "ja_anime_cinematic").trim();
@@ -580,6 +584,7 @@ async function onGenerate() {
       vfx: el.vfxToggle.checked,
       sfx: el.sfxToggle.checked
     },
+    generate_keyframes: !!el.keyframesToggle?.checked,
     generate_contact_sheet: el.contactSheetToggle.checked
   };
 
@@ -592,7 +597,7 @@ async function onGenerate() {
 
   try {
     el.progressBar.style.width = "0%";
-    await simulateProgress(settings.generate_contact_sheet);
+    await simulateProgress(settings.generate_contact_sheet, settings.generate_keyframes);
     if (inputMode === "reference") {
       referenceImagePrompt = await refreshReferencePrompt();
     }
@@ -617,7 +622,7 @@ async function onGenerate() {
     const enriched = await maybeEnhanceResultTextWithGemini(result);
     appState.lastResult = enriched;
 
-    renderResult(enriched);
+    renderResult(enriched, { showKf: settings.generate_keyframes });
     saveHistory(enriched);
     saveCurrentTabState();
     renderHistory();
@@ -676,6 +681,7 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
       vfx: el.vfxToggle.checked,
       sfx: el.sfxToggle.checked
     },
+    generate_keyframes: !!el.keyframesToggle?.checked,
     generate_contact_sheet: el.contactSheetToggle.checked
   };
 
@@ -692,7 +698,7 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
   if (el.generateMusicJsonBtn) el.generateMusicJsonBtn.disabled = true;
   try {
     el.progressBar.style.width = "0%";
-    await simulateProgress(settings.generate_contact_sheet);
+    await simulateProgress(settings.generate_contact_sheet, settings.generate_keyframes);
     const result = buildResult({
       inputMode: "musicvideo",
       scriptText: "",
@@ -734,14 +740,16 @@ function notifyGenerateBlocked(message) {
   }
 }
 
-async function simulateProgress(withContactSheet) {
+async function simulateProgress(withContactSheet, withKeyframes = true) {
   const stages = [
     { label: "입력 검증 중...", target: 8 },
     { label: "시퀀스 아키텍처 설계 중...", target: 24 },
-    { label: "키프레임 생성 중...", target: 48 },
     { label: "시나리오/연출 노트 작성 중...", target: 72 },
     { label: "프롬프트 생성 중...", target: 87 }
   ];
+  if (withKeyframes) {
+    stages.splice(2, 0, { label: "키프레임 생성 중...", target: 48 });
+  }
 
   if (withContactSheet) {
     stages.push({ label: "마스터 콘택트 시트 생성 중...", target: 96 });
@@ -777,9 +785,12 @@ function buildResult({ inputMode, scriptText, musicLyricsText, musicStyleKey, mu
   const characters = buildCharacterMap(scriptSegments);
   const stylePreset = getMusicStylePreset(musicStyleKey || "ja_anime_cinematic");
   const customStylePrompt = getStylePromptByKey(musicStyleKey || "ja_anime_cinematic");
-  const durations = inputMode === "script"
-    ? splitDurationsBySegments(totalSec, kfCount, scriptSegments)
-    : splitDurations(totalSec, kfCount);
+  const effectiveKfCount = settings.generate_keyframes ? kfCount : 0;
+  const durations = effectiveKfCount > 0
+    ? (inputMode === "script"
+      ? splitDurationsBySegments(totalSec, effectiveKfCount, scriptSegments)
+      : splitDurations(totalSec, effectiveKfCount))
+    : [];
 
   const musicSynopsisKo = inputMode === "musicvideo"
     ? (musicSynopsisInputText
@@ -787,10 +798,10 @@ function buildResult({ inputMode, scriptText, musicLyricsText, musicStyleKey, mu
       : buildMusicVideoSynopsis(musicAnalysis, musicStyleLabel || stylePreset.label))
     : "";
 
-  const keyframes = Array.from({ length: kfCount }, (_, i) =>
+  const keyframes = Array.from({ length: effectiveKfCount }, (_, i) =>
     makeFrame(
       i + 1,
-      kfCount,
+      effectiveKfCount,
       durations[i],
       scriptSegments[i % Math.max(scriptSegments.length, 1)] || null,
       {
@@ -823,7 +834,7 @@ function buildResult({ inputMode, scriptText, musicLyricsText, musicStyleKey, mu
 
   const result = {
     meta: {
-      version: "1.3",
+      version: "1.4",
       project_id: `proj_${now.getTime()}`,
       created_at: now.toISOString(),
       text_model: getSavedGeminiApiKey() ? getCurrentGeminiModel() : "local-fallback",
@@ -860,12 +871,13 @@ function buildResult({ inputMode, scriptText, musicLyricsText, musicStyleKey, mu
     },
     settings: {
       effects: settings.effects,
+      generate_keyframes: settings.generate_keyframes,
       generate_contact_sheet: settings.generate_contact_sheet
     },
     keyframe_plan: {
       mode: inputMode === "script" ? "auto_by_script_length" : "fixed_12",
       script_char_count: inputMode === "script" ? charCount : 0,
-      kf_count: kfCount,
+      kf_count: effectiveKfCount,
       timeline_sec: totalSec,
       estimated_content_sec: inputMode === "script" ? scriptAnalysis?.estimatedContentSec || 0 : 0,
       rule_version: inputMode === "script"
@@ -892,7 +904,7 @@ function buildResult({ inputMode, scriptText, musicLyricsText, musicStyleKey, mu
       music_prompt_en: buildMusicPrompt(settings)
     },
     contact_sheet: {
-      enabled: settings.generate_contact_sheet,
+      enabled: settings.generate_contact_sheet && settings.generate_keyframes,
       image_url: ""
     },
     ui_state: {
@@ -904,7 +916,7 @@ function buildResult({ inputMode, scriptText, musicLyricsText, musicStyleKey, mu
     }
   };
 
-  if (settings.generate_contact_sheet) {
+  if (settings.generate_contact_sheet && keyframes.length > 0) {
     result.contact_sheet.image_url = makeContactSheetDataUrl(keyframes, settings.ratio);
   }
 
@@ -1073,7 +1085,9 @@ function buildMusicPrompt(settings) {
 }
 
 function renderResult(result, options = {}) {
-  const showKf = options.showKf !== false;
+  const showKf = options.showKf !== undefined
+    ? options.showKf !== false
+    : !!(result?.settings?.generate_keyframes ?? (result?.keyframes?.length > 0));
   const showJson = options.showJson !== false;
   el.resultSection.classList.remove("hidden");
   el.liveScriptEditor.value = buildEditorText(result);
@@ -1585,6 +1599,7 @@ function resetAll() {
   el.bgmToggle.checked = false;
   el.vfxToggle.checked = false;
   el.sfxToggle.checked = false;
+  if (el.keyframesToggle) el.keyframesToggle.checked = true;
   el.contactSheetToggle.checked = false;
   el.progressBar.style.width = "0%";
   el.statusMessage.textContent = "대기 중";
@@ -1644,6 +1659,7 @@ function createInitialTabStates() {
       bgm: false,
       vfx: false,
       sfx: false,
+      keyframes: true,
       contactSheet: false,
       lastResult: null
     },
@@ -1655,6 +1671,7 @@ function createInitialTabStates() {
       bgm: false,
       vfx: false,
       sfx: false,
+      keyframes: true,
       contactSheet: false,
       lastResult: null
     },
@@ -1668,6 +1685,7 @@ function createInitialTabStates() {
       bgm: false,
       vfx: false,
       sfx: false,
+      keyframes: true,
       contactSheet: false,
       lastResult: null
     }
@@ -1683,6 +1701,7 @@ function saveCurrentTabState() {
   state.bgm = el.bgmToggle.checked;
   state.vfx = el.vfxToggle.checked;
   state.sfx = el.sfxToggle.checked;
+  state.keyframes = !!el.keyframesToggle?.checked;
   state.contactSheet = el.contactSheetToggle.checked;
   state.lastResult = appState.lastResult ? JSON.parse(JSON.stringify(appState.lastResult)) : null;
 
@@ -1710,6 +1729,7 @@ function loadTabState(mode) {
   el.bgmToggle.checked = !!state.bgm;
   el.vfxToggle.checked = !!state.vfx;
   el.sfxToggle.checked = !!state.sfx;
+  if (el.keyframesToggle) el.keyframesToggle.checked = state.keyframes !== false;
   el.contactSheetToggle.checked = !!state.contactSheet;
 
   if (mode === "script") {
@@ -1751,6 +1771,12 @@ function applyLoadedResultToInputs(result) {
       ? "musicvideo"
       : "script";
   setInputMode(mode);
+
+  if (el.bgmToggle) el.bgmToggle.checked = !!result?.settings?.effects?.bgm;
+  if (el.vfxToggle) el.vfxToggle.checked = !!result?.settings?.effects?.vfx;
+  if (el.sfxToggle) el.sfxToggle.checked = !!result?.settings?.effects?.sfx;
+  if (el.keyframesToggle) el.keyframesToggle.checked = result?.settings?.generate_keyframes !== false;
+  if (el.contactSheetToggle) el.contactSheetToggle.checked = !!result?.settings?.generate_contact_sheet;
 
   if (mode === "script") {
     el.scriptInput.value = result?.input?.script_text || "";
@@ -2118,18 +2144,27 @@ function saveSampleScript() {
   const script = (el.scriptInput?.value || "").trim();
   if (!script) {
     alert("저장할 대본을 먼저 입력하세요.");
+    setSampleScriptStatus("저장 실패: 대본이 비어 있습니다.", "warn");
     return;
   }
 
-  safeStorageSet(SAMPLE_SCRIPT_STORAGE, script);
+  const stored = safeStorageSet(SAMPLE_SCRIPT_STORAGE, script);
+  appState.sampleScriptMemory = script;
   updateSampleScriptButtons();
+  if (!stored) {
+    alert("브라우저 저장소 접근이 제한되어 메모리에만 임시 저장했습니다.");
+    setSampleScriptStatus("임시 저장됨(브라우저 저장소 제한).", "warn");
+  } else {
+    setSampleScriptStatus("샘플 대본 저장 완료.", "ok");
+  }
   flashButtonCopied(el.saveSampleScriptBtn, "샘플 대본 저장");
 }
 
 function loadSampleScript() {
-  const saved = safeStorageGet(SAMPLE_SCRIPT_STORAGE);
+  const saved = safeStorageGet(SAMPLE_SCRIPT_STORAGE) || appState.sampleScriptMemory || "";
   if (!saved) {
     alert("저장된 샘플 대본이 없습니다.");
+    setSampleScriptStatus("불러오기 실패: 저장된 샘플 대본이 없습니다.", "warn");
     return;
   }
 
@@ -2138,12 +2173,22 @@ function loadSampleScript() {
   }
   updateScriptMetrics();
   autoGrowScriptInput();
+  setSampleScriptStatus("샘플 대본 불러오기 완료.", "ok");
 }
 
 function updateSampleScriptButtons() {
-  const hasSample = !!safeStorageGet(SAMPLE_SCRIPT_STORAGE);
+  const hasSample = !!(safeStorageGet(SAMPLE_SCRIPT_STORAGE) || appState.sampleScriptMemory);
   if (el.loadSampleScriptBtn) {
     el.loadSampleScriptBtn.disabled = !hasSample;
+  }
+}
+
+function setSampleScriptStatus(message, tone = "") {
+  if (!el.sampleScriptStatus) return;
+  el.sampleScriptStatus.textContent = String(message || "");
+  el.sampleScriptStatus.classList.remove("ok", "warn");
+  if (tone === "ok" || tone === "warn") {
+    el.sampleScriptStatus.classList.add(tone);
   }
 }
 
@@ -2554,6 +2599,7 @@ function syncLiveScriptEditorToKeyframes(nextText, mode) {
     ratio: "9:16",
     runtime,
     effects,
+    generate_keyframes: !!(prev?.settings?.generate_keyframes ?? (prev?.keyframes?.length > 0)),
     generate_contact_sheet: !!prev?.contact_sheet?.enabled
   };
 
@@ -2885,6 +2931,23 @@ function applyFirstDialogueQuotePaddingToActorLines(text) {
   return next.join("\n");
 }
 
+function sanitizeScriptNoise(text) {
+  const lines = String(text || "").split("\n");
+  const filtered = lines.filter((line) => !isScriptNoiseLine(line));
+  return filtered.join("\n");
+}
+
+function sanitizeScriptInputInPlace() {
+  if (!el.scriptInput) return;
+  const prev = String(el.scriptInput.value || "");
+  const next = sanitizeScriptNoise(prev);
+  if (prev === next) return;
+
+  const pos = Math.min(el.scriptInput.selectionStart ?? next.length, next.length);
+  el.scriptInput.value = next;
+  el.scriptInput.setSelectionRange(pos, pos);
+}
+
 function formatScriptForEditor(text) {
   const actorLines = getValidActorLines(text);
   if (actorLines.length) return actorLines.join("\n");
@@ -2898,7 +2961,8 @@ function getValidActorLines(text) {
   const lines = raw
     .split("\n")
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((line) => !isScriptNoiseLine(line));
 
   // Only keep strict ACTOR cue lines with actual content after ":".
   return lines.filter((line) => {
@@ -2907,6 +2971,15 @@ function getValidActorLines(text) {
     if (colonIdx < 0) return false;
     return line.slice(colonIdx + 1).trim().length > 0;
   });
+}
+
+function isScriptNoiseLine(line) {
+  const t = String(line || "").trim();
+  if (!t) return false;
+  if (/^대사\s*글자수\s*집계\s*:?\s*$/i.test(t)) return true;
+  if (/^이\s*대본\s*따옴표\s*대사\s*총합\s*[:：].+$/i.test(t)) return true;
+  if (/^ACTOR\d+\b.*대사\s*합\s*[:：].*$/i.test(t)) return true;
+  return false;
 }
 
 function parseActorLine(line) {

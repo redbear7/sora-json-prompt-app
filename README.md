@@ -1,6 +1,6 @@
 # sora-json-prompt-app
 
-Sora JSON v1.3 기반 스토리보드 생성 웹앱(정적 파일).
+Sora JSON v1.4 기반 스토리보드 생성 웹앱(정적 파일).
 
 ## 실행
 - 터미널에서:
