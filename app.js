@@ -1,5 +1,6 @@
 const STORAGE_KEY = "sora_json_prompt_history_v1_3";
 const API_KEY_STORAGE = "sora_gemini_api_key";
+const SAMPLE_SCRIPT_STORAGE = "sora_script_sample_v1";
 const SAMPLE_LYRICS_STORAGE = "sora_musicvideo_sample_lyrics_v1";
 const SAMPLE_SCRIPT_STORAGE = "sora_script_sample_v1";
 const STYLE_SAMPLE_STORAGE = "sora_musicvideo_style_samples_v1";
@@ -34,6 +35,8 @@ const el = {
   scriptFontSizeLabel: document.getElementById("scriptFontSizeLabel"),
   scriptHeightRange: document.getElementById("scriptHeightRange"),
   scriptHeightLabel: document.getElementById("scriptHeightLabel"),
+  saveSampleScriptBtn: document.getElementById("saveSampleScriptBtn"),
+  loadSampleScriptBtn: document.getElementById("loadSampleScriptBtn"),
   musicLyricsInput: document.getElementById("musicLyricsInput"),
   musicSynopsisInput: document.getElementById("musicSynopsisInput"),
   musicStyleSelect: document.getElementById("musicStyleSelect"),
@@ -266,6 +269,8 @@ function init() {
         applyScriptInputHeight(Number(el.scriptHeightRange.value || 360), true);
       });
     }
+    if (el.saveSampleScriptBtn) el.saveSampleScriptBtn.addEventListener("click", saveSampleScript);
+    if (el.loadSampleScriptBtn) el.loadSampleScriptBtn.addEventListener("click", loadSampleScript);
     if (el.musicLyricsInput) el.musicLyricsInput.addEventListener("input", updateScriptMetrics);
     if (el.musicSynopsisInput) el.musicSynopsisInput.addEventListener("input", saveCurrentTabState);
     if (el.musicStyleSelect) {
@@ -340,6 +345,7 @@ function init() {
     setInputMode("script");
     updateScriptMetrics();
     autoGrowScriptInput();
+    updateSampleScriptButtons();
     updateSampleLyricsButtons();
     updateSampleScriptButtons();
     renderMusicStyleGallery();
@@ -973,7 +979,9 @@ function makeFrame(n, total, durationSec, sourceSegment, refContext = {}) {
       refContext.storyHintEn || "",
       refContext.storySynopsisKo || ""
     ),
-    source_text: sourceSegment ? sourceSegment.raw : "",
+    source_text: sourceSegment
+      ? normalizeSourceTextByType(sourceSegment.raw, sourceSegment.type)
+      : "",
     source_type: sourceSegment ? sourceSegment.type : "generated",
     lyric_text_ko: sourceSegment?.type === "lyric_pair"
       ? [sourceSegment?.lyric_line_1, sourceSegment?.lyric_line_2].filter(Boolean).join("\n")
@@ -984,6 +992,17 @@ function makeFrame(n, total, durationSec, sourceSegment, refContext = {}) {
     lighting_en: "Contrasty practical lights with soft fill and directional highlights.",
     sound_en: "Layered ambience, emotional underscore, and timed Foley accents."
   };
+}
+
+function normalizeSourceTextByType(sourceText, sourceType) {
+  const raw = String(sourceText || "").trim();
+  if (!raw) return "";
+  if (sourceType !== "dialogue") return raw;
+
+  const quotes = raw.match(/"[^"]+"|'[^']+'|“[^”]+”|‘[^’]+’/g) || [];
+  if (quotes.length) return quotes.join(" ").trim();
+
+  return raw.replace(/\([^)]*\)|\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
 }
 
 function buildActionDirectionText(sourceSegment, beat, storyHintEn, storySynopsisKo = "") {
@@ -2098,19 +2117,19 @@ function saveSampleLyrics() {
 function saveSampleScript() {
   const script = (el.scriptInput?.value || "").trim();
   if (!script) {
-    alert("등록할 대본을 먼저 입력하세요.");
+    alert("저장할 대본을 먼저 입력하세요.");
     return;
   }
 
   safeStorageSet(SAMPLE_SCRIPT_STORAGE, script);
   updateSampleScriptButtons();
-  flashButtonCopied(el.saveSampleScriptBtn, "샘플대본 등록");
+  flashButtonCopied(el.saveSampleScriptBtn, "샘플 대본 저장");
 }
 
 function loadSampleScript() {
   const saved = safeStorageGet(SAMPLE_SCRIPT_STORAGE);
   if (!saved) {
-    alert("등록된 샘플대본이 없습니다.");
+    alert("저장된 샘플 대본이 없습니다.");
     return;
   }
 
@@ -2118,6 +2137,14 @@ function loadSampleScript() {
     el.scriptInput.value = saved;
   }
   updateScriptMetrics();
+  autoGrowScriptInput();
+}
+
+function updateSampleScriptButtons() {
+  const hasSample = !!safeStorageGet(SAMPLE_SCRIPT_STORAGE);
+  if (el.loadSampleScriptBtn) {
+    el.loadSampleScriptBtn.disabled = !hasSample;
+  }
 }
 
 function loadSampleLyrics() {

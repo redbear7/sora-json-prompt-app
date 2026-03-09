@@ -267,6 +267,10 @@ textarea {
   overflow: auto;
 }
 
+.script-sample-row {
+  margin-top: 8px;
+}
+
 .reference-preview {
   width: min(420px, 100%);
   border: 1px solid var(--line);
