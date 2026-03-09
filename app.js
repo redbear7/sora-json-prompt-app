@@ -526,10 +526,6 @@ async function onGenerate() {
     return;
   }
 
-  if (inputMode === "script") {
-    scriptText = applyFirstDialogueQuotePaddingToActorLines(scriptText);
-  }
-
   if (inputMode === "reference" && !referenceImageDataUrl) {
     notifyGenerateBlocked("Reference 모드에서는 이미지 파일 업로드가 필요합니다.");
     return;
@@ -2605,7 +2601,7 @@ function syncLiveScriptEditorToKeyframes(nextText, mode) {
 
   let rebuilt = null;
   if (mode === "script") {
-    const scriptText = applyFirstDialogueQuotePaddingToActorLines(String(nextText || "").trim());
+    const scriptText = String(nextText || "").trim();
     const scriptAnalysis = analyzeScript(scriptText);
     rebuilt = buildResult({
       inputMode: "script",
@@ -2904,31 +2900,6 @@ function extractCueContent(line) {
   }
 
   return tail;
-}
-
-function applyFirstDialogueQuotePaddingToActorLines(text) {
-  const lines = String(text || "").split("\n");
-  let patched = false;
-
-  const next = lines.map((line) => {
-    if (patched) return line;
-    if (!/^ACTOR\d*\b/i.test((line || "").trim())) return line;
-
-    const colonIdx = line.indexOf(":");
-    if (colonIdx < 0) return line;
-
-    const head = line.slice(0, colonIdx + 1);
-    const tail = line.slice(colonIdx + 1);
-
-    const paddedTail = tail
-      .replace(/"(?=\S)/, "\" ")
-      .replace(/“(?=\S)/, "“ ");
-
-    if (paddedTail !== tail) patched = true;
-    return `${head}${paddedTail}`;
-  });
-
-  return next.join("\n");
 }
 
 function sanitizeScriptNoise(text) {
