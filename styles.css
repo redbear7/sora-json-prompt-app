@@ -75,9 +75,11 @@ body {
   color: var(--muted);
 }
 
-.history-layout-controls span {
-  font-size: 0.82rem;
+.history-subtitle {
+  margin: 8px 0 6px;
+  font-size: 0.78rem;
   color: var(--muted);
+  letter-spacing: 0.04em;
 }
 
 .col-resizer {

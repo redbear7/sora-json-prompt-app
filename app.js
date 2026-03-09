@@ -90,7 +90,6 @@ const el = {
   historyPanel: document.getElementById("historyPanel"),
   colResizer: document.getElementById("colResizer"),
   columnRatioRange: document.getElementById("columnRatioRange"),
-  columnRatioLabel: document.getElementById("columnRatioLabel"),
   apiKeyInput: document.getElementById("apiKeyInput"),
   geminiLamp: document.getElementById("geminiLamp"),
   geminiStatusText: document.getElementById("geminiStatusText"),
@@ -148,7 +147,6 @@ function applyColumnRatio(value, persist = true) {
   const ratio = Math.max(18, Math.min(55, Number(value) || 28));
   document.documentElement.style.setProperty("--left-col-pct", `${ratio}%`);
   if (el.columnRatioRange) el.columnRatioRange.value = String(ratio);
-  if (el.columnRatioLabel) el.columnRatioLabel.textContent = `${ratio} : ${100 - ratio}`;
   if (persist) saveColumnRatio(ratio);
 }
 
@@ -380,8 +378,8 @@ function setInputMode(mode) {
   const isReference = mode === "reference";
   const isMusicVideo = mode === "musicvideo";
 
-  el.scriptTab.classList.toggle("active", isScript);
-  el.referenceTab.classList.toggle("active", isReference);
+  if (el.scriptTab) el.scriptTab.classList.toggle("active", isScript);
+  if (el.referenceTab) el.referenceTab.classList.toggle("active", isReference);
   if (el.musicVideoTab) el.musicVideoTab.classList.toggle("active", isMusicVideo);
   el.scriptInputArea.classList.toggle("hidden", !isScript);
   el.referenceInputArea.classList.toggle("hidden", !isReference);
@@ -1212,8 +1210,7 @@ function renderHistory() {
 
   const sections = modes.map((mode) => {
     const items = history.filter((item) => item.input_mode === mode.key);
-    const body = items.length
-      ? items.map((item) => `
+    const renderItems = (list) => list.map((item) => `
           <div class="history-item">
             <div>
               <button data-project-id="${item.project_id}" class="history-title-btn">${escapeHtml(item.title || item.project_id)}</button>
@@ -1223,8 +1220,33 @@ function renderHistory() {
               <button class="btn ghost danger history-delete-btn" data-delete-project-id="${item.project_id}">삭제</button>
             </div>
           </div>
-        `).join("")
-      : `<p>${mode.label} 저장 내역이 없습니다.</p>`;
+        `).join("");
+
+    let body = "";
+    if (!items.length) {
+      body = `<p>${mode.label} 저장 내역이 없습니다.</p>`;
+    } else if (mode.key === "script") {
+      const today = new Date();
+      const isToday = (value) => {
+        const d = new Date(value);
+        return d.getFullYear() === today.getFullYear()
+          && d.getMonth() === today.getMonth()
+          && d.getDate() === today.getDate();
+      };
+      const todayItems = items.filter((item) => isToday(item.created_at));
+      const olderItems = items.filter((item) => !isToday(item.created_at));
+
+      body = [
+        `<div class="history-subtitle">오늘 생성한 스크립트 (${todayItems.length})</div>`,
+        todayItems.length ? renderItems(todayItems) : `<p>오늘 생성한 스크립트가 없습니다.</p>`,
+        olderItems.length
+          ? `<div class="history-subtitle">이전 생성 스크립트 (${olderItems.length})</div>${renderItems(olderItems)}`
+          : ""
+      ].join("");
+    } else {
+      body = renderItems(items);
+    }
+
     return `
       <section class="history-group">
         <h3>${mode.label}</h3>
@@ -1595,7 +1617,7 @@ function resetAll() {
   el.bgmToggle.checked = false;
   el.vfxToggle.checked = false;
   el.sfxToggle.checked = false;
-  if (el.keyframesToggle) el.keyframesToggle.checked = true;
+  if (el.keyframesToggle) el.keyframesToggle.checked = false;
   el.contactSheetToggle.checked = false;
   el.progressBar.style.width = "0%";
   el.statusMessage.textContent = "대기 중";
@@ -1655,7 +1677,7 @@ function createInitialTabStates() {
       bgm: false,
       vfx: false,
       sfx: false,
-      keyframes: true,
+      keyframes: false,
       contactSheet: false,
       lastResult: null
     },
@@ -1667,7 +1689,7 @@ function createInitialTabStates() {
       bgm: false,
       vfx: false,
       sfx: false,
-      keyframes: true,
+      keyframes: false,
       contactSheet: false,
       lastResult: null
     },
@@ -1681,7 +1703,7 @@ function createInitialTabStates() {
       bgm: false,
       vfx: false,
       sfx: false,
-      keyframes: true,
+      keyframes: false,
       contactSheet: false,
       lastResult: null
     }
