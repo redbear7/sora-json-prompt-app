@@ -4,6 +4,7 @@ const SAMPLE_LYRICS_STORAGE = "sora_musicvideo_sample_lyrics_v1";
 const SAMPLE_SCRIPT_STORAGE = "sora_script_sample_v1";
 const STYLE_SAMPLE_STORAGE = "sora_musicvideo_style_samples_v1";
 const STYLE_PROMPT_STORAGE = "sora_musicvideo_style_prompts_v1";
+const MUSIC_VIDEO_EXTERNAL_URL = "https://service-231233516128.us-west1.run.app/";
 const COLUMN_RATIO_STORAGE = "sora_layout_left_col_ratio_v1";
 const SCRIPT_FONT_SIZE_STORAGE = "sora_script_font_size_v1";
 const SCRIPT_HEIGHT_STORAGE = "sora_script_input_height_v1";
@@ -243,7 +244,11 @@ function init() {
   try {
     if (el.scriptTab) el.scriptTab.addEventListener("click", () => onTabClick("script"));
     if (el.referenceTab) el.referenceTab.addEventListener("click", () => onTabClick("reference"));
-    if (el.musicVideoTab) el.musicVideoTab.addEventListener("click", () => onTabClick("musicvideo"));
+    if (el.musicVideoTab) {
+      el.musicVideoTab.addEventListener("click", () => {
+        window.open(MUSIC_VIDEO_EXTERNAL_URL, "_blank", "noopener,noreferrer");
+      });
+    }
     if (el.appTitle) el.appTitle.addEventListener("click", resetToIdleMode);
     if (el.scriptInput) {
       el.scriptInput.addEventListener("input", () => {
