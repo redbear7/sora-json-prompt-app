@@ -8,6 +8,7 @@
   --accent: #37d39a;
   --warn: #e35d5d;
   --left-col-pct: 28%;
+  --app-font-family: "Noto Sans KR", "Pretendard Variable", "SUIT", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -19,7 +20,7 @@ body {
   background: radial-gradient(circle at 15% 10%, #1d3554, transparent 38%),
     radial-gradient(circle at 90% 85%, #2d194a, transparent 36%),
     linear-gradient(145deg, var(--bg-0), var(--bg-1));
-  font-family: "Pretendard Variable", "SUIT", "Noto Sans KR", sans-serif;
+  font-family: var(--app-font-family);
   overflow-x: hidden;
 }
 
@@ -159,6 +160,7 @@ h3 { font-size: 0.95rem; color: var(--muted); margin-top: 16px; }
 
 #appTitle {
   cursor: pointer;
+  font-size: clamp(1.05rem, 2.1vw, 1.45rem);
 }
 
 .header-actions {
@@ -271,6 +273,20 @@ textarea {
 
 .script-sample-row {
   margin-top: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.inline-font-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.inline-font-select {
+  min-width: 170px;
+  max-width: 220px;
+  padding: 8px 10px;
 }
 
 .sample-script-status {

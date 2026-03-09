@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sora JSON Prompt App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gothic+A1:wght@400;500;700&family=Hi+Melody&family=IBM+Plex+Sans+KR:wght@400;500;700&family=Jua&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&family=Sunflower:wght@300;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css?v=20260309-1" />
 </head>
 <body>
@@ -35,7 +38,6 @@
           </div>
         </div>
         <button id="saveApiKeyBtn" class="btn ghost">API Key Save</button>
-        <button id="resetBtn" class="btn ghost danger">Reset</button>
       </div>
     </header>
 
@@ -71,6 +73,19 @@
         <div class="action-row script-sample-row">
           <button id="saveSampleScriptBtn" class="btn ghost" type="button">샘플 대본 저장</button>
           <button id="loadSampleScriptBtn" class="btn ghost" type="button">샘플 대본 불러오기</button>
+          <label for="globalFontSelect" class="inline-font-label">전체 폰트</label>
+          <select id="globalFontSelect" class="inline-font-select">
+            <option value="noto_sans_kr">Noto Sans KR</option>
+            <option value="nanum_gothic">Nanum Gothic</option>
+            <option value="nanum_myeongjo">Nanum Myeongjo</option>
+            <option value="black_han_sans">Black Han Sans</option>
+            <option value="do_hyeon">Do Hyeon</option>
+            <option value="jua">Jua</option>
+            <option value="gothic_a1">Gothic A1</option>
+            <option value="ibm_plex_sans_kr">IBM Plex Sans KR</option>
+            <option value="sunflower">Sunflower</option>
+            <option value="hi_melody">Hi Melody</option>
+          </select>
         </div>
         <div id="sampleScriptStatus" class="sample-script-status" aria-live="polite"></div>
         <div class="inline-meta">

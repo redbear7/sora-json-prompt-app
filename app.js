@@ -9,6 +9,7 @@ const MUSIC_VIDEO_EXTERNAL_URL = "https://service-231233516128.us-west1.run.app/
 const COLUMN_RATIO_STORAGE = "sora_layout_left_col_ratio_v1";
 const SCRIPT_FONT_SIZE_STORAGE = "sora_script_font_size_v1";
 const SCRIPT_HEIGHT_STORAGE = "sora_script_input_height_v1";
+const GLOBAL_FONT_STORAGE = "sora_global_font_v1";
 const GEMINI_TEXT_MODEL = "gemini-3.0-flash";
 const GEMINI_MODEL_STORAGE = "sora_gemini_active_model_v1";
 const GEMINI_FALLBACK_MODELS = [
@@ -18,6 +19,18 @@ const GEMINI_FALLBACK_MODELS = [
   "gemini-1.5-flash"
 ];
 const IMAGE_MODEL_NAME = "nanobanana2";
+const GOOGLE_KR_FONT_MAP = {
+  noto_sans_kr: "\"Noto Sans KR\", \"Pretendard Variable\", \"SUIT\", sans-serif",
+  nanum_gothic: "\"Nanum Gothic\", \"Noto Sans KR\", sans-serif",
+  nanum_myeongjo: "\"Nanum Myeongjo\", \"Noto Serif KR\", serif",
+  black_han_sans: "\"Black Han Sans\", \"Noto Sans KR\", sans-serif",
+  do_hyeon: "\"Do Hyeon\", \"Noto Sans KR\", sans-serif",
+  jua: "\"Jua\", \"Noto Sans KR\", sans-serif",
+  gothic_a1: "\"Gothic A1\", \"Noto Sans KR\", sans-serif",
+  ibm_plex_sans_kr: "\"IBM Plex Sans KR\", \"Noto Sans KR\", sans-serif",
+  sunflower: "\"Sunflower\", \"Noto Sans KR\", sans-serif",
+  hi_melody: "\"Hi Melody\", \"Noto Sans KR\", cursive"
+};
 
 const el = {
   appTitle: document.getElementById("appTitle"),
@@ -35,6 +48,7 @@ const el = {
   scriptFontSizeLabel: document.getElementById("scriptFontSizeLabel"),
   scriptHeightRange: document.getElementById("scriptHeightRange"),
   scriptHeightLabel: document.getElementById("scriptHeightLabel"),
+  globalFontSelect: document.getElementById("globalFontSelect"),
   saveSampleScriptBtn: document.getElementById("saveSampleScriptBtn"),
   loadSampleScriptBtn: document.getElementById("loadSampleScriptBtn"),
   sampleScriptStatus: document.getElementById("sampleScriptStatus"),
@@ -94,8 +108,7 @@ const el = {
   geminiLamp: document.getElementById("geminiLamp"),
   geminiStatusText: document.getElementById("geminiStatusText"),
   modelNamesText: document.getElementById("modelNamesText"),
-  saveApiKeyBtn: document.getElementById("saveApiKeyBtn"),
-  resetBtn: document.getElementById("resetBtn")
+  saveApiKeyBtn: document.getElementById("saveApiKeyBtn")
 };
 
 const appState = {
@@ -112,6 +125,7 @@ const appState = {
   leftColRatio: loadColumnRatio(),
   scriptFontSize: loadScriptFontSize(),
   scriptInputHeight: loadScriptInputHeight(),
+  globalFontKey: loadGlobalFontKey(),
   activeGeminiModel: loadGeminiActiveModel()
 };
 
@@ -196,6 +210,12 @@ function loadScriptInputHeight() {
   return 360;
 }
 
+function loadGlobalFontKey() {
+  const raw = String(safeStorageGet(GLOBAL_FONT_STORAGE) || "").trim();
+  if (raw && GOOGLE_KR_FONT_MAP[raw]) return raw;
+  return "noto_sans_kr";
+}
+
 function loadGeminiActiveModel() {
   const raw = String(safeStorageGet(GEMINI_MODEL_STORAGE) || "").trim();
   if (!raw) return "";
@@ -225,6 +245,14 @@ function applyScriptInputHeight(height, persist = true) {
   if (el.scriptHeightLabel) el.scriptHeightLabel.textContent = `${px}px`;
   appState.scriptInputHeight = px;
   if (persist) safeStorageSet(SCRIPT_HEIGHT_STORAGE, String(px));
+}
+
+function applyGlobalFont(fontKey, persist = true) {
+  const key = GOOGLE_KR_FONT_MAP[fontKey] ? fontKey : "noto_sans_kr";
+  document.documentElement.style.setProperty("--app-font-family", GOOGLE_KR_FONT_MAP[key]);
+  appState.globalFontKey = key;
+  if (el.globalFontSelect) el.globalFontSelect.value = key;
+  if (persist) safeStorageSet(GLOBAL_FONT_STORAGE, key);
 }
 
 window.addEventListener("error", (event) => {
@@ -269,6 +297,11 @@ function init() {
     if (el.scriptHeightRange) {
       el.scriptHeightRange.addEventListener("input", () => {
         applyScriptInputHeight(Number(el.scriptHeightRange.value || 360), true);
+      });
+    }
+    if (el.globalFontSelect) {
+      el.globalFontSelect.addEventListener("change", () => {
+        applyGlobalFont(el.globalFontSelect.value, true);
       });
     }
     if (el.saveSampleScriptBtn) el.saveSampleScriptBtn.addEventListener("click", saveSampleScript);
@@ -325,7 +358,6 @@ function init() {
         void saveApiKey();
       });
     }
-    if (el.resetBtn) el.resetBtn.addEventListener("click", resetAll);
     if (el.liveScriptEditor) {
       el.liveScriptEditor.addEventListener("input", () => {
         autoGrowTextarea();
@@ -357,6 +389,7 @@ function init() {
     applyColumnRatio(appState.leftColRatio, false);
     applyScriptFontSize(appState.scriptFontSize, false);
     applyScriptInputHeight(appState.scriptInputHeight, false);
+    applyGlobalFont(appState.globalFontKey, false);
     notifyGenerateBlocked("대기 중");
   } catch (e) {
     notifyGenerateBlocked(`초기화 오류: ${e?.message || "알 수 없음"}`);
