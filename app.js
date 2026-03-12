@@ -14,8 +14,7 @@ const GEMINI_MODEL_STORAGE = "sora_gemini_active_model_v1";
 const GEMINI_FALLBACK_MODELS = [
   GEMINI_TEXT_MODEL,
   "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash"
+  "gemini-2.0-flash"
 ];
 const IMAGE_MODEL_NAME = "nanobanana2";
 const volatileStorage = {};
@@ -1375,8 +1374,17 @@ async function validateGeminiApiKey(apiKey) {
     return { ok: false, message: "API Key가 비어 있습니다." };
   }
 
+  const listedModels = await fetchGeminiGenerateModels(apiKey);
+  const listedSet = new Set(listedModels);
+  const prioritizedListed = GEMINI_FALLBACK_MODELS.filter((m) => listedSet.has(m));
+  const flashListed = listedModels.filter((m) => /flash/i.test(m) && !prioritizedListed.includes(m));
+  const othersListed = listedModels.filter((m) => !prioritizedListed.includes(m) && !flashListed.includes(m));
+  const candidateModels = listedModels.length
+    ? [...prioritizedListed, ...flashListed, ...othersListed]
+    : [...GEMINI_FALLBACK_MODELS];
+
   let lastError = "";
-  for (const model of GEMINI_FALLBACK_MODELS) {
+  for (const model of candidateModels) {
     const check = await probeGeminiModel(apiKey, model);
     if (check.ok) {
       return { ok: true, message: "OK", model };
@@ -1384,6 +1392,26 @@ async function validateGeminiApiKey(apiKey) {
     lastError = check.message || lastError;
   }
   return { ok: false, message: lastError || "지원되는 Gemini Flash 모델을 찾지 못했습니다." };
+}
+
+async function fetchGeminiGenerateModels(apiKey) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9000);
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return [];
+    const payload = await response.json();
+    const models = Array.isArray(payload?.models) ? payload.models : [];
+    return models
+      .filter((m) => Array.isArray(m?.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+      .map((m) => String(m?.name || "").replace(/^models\//, "").trim())
+      .filter(Boolean);
+  } catch (_e) {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function probeGeminiModel(apiKey, modelName) {
