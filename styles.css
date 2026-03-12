@@ -250,6 +250,7 @@ input, select, textarea, .btn {
   border: 1px solid var(--line);
   background: #0d1525;
   color: var(--text);
+  font-family: inherit;
   padding: 10px 12px;
 }
 

@@ -267,7 +267,11 @@ function applyScriptInputHeight(height, persist = true) {
 
 function applyGlobalFont(fontKey, persist = true) {
   const key = GOOGLE_KR_FONT_MAP[fontKey] ? fontKey : "noto_sans_kr";
-  document.documentElement.style.setProperty("--app-font-family", GOOGLE_KR_FONT_MAP[key]);
+  const family = GOOGLE_KR_FONT_MAP[key];
+  document.documentElement.style.setProperty("--app-font-family", family);
+  if (document.body) {
+    document.body.style.fontFamily = family;
+  }
   appState.globalFontKey = key;
   if (el.globalFontSelect) el.globalFontSelect.value = key;
   if (persist) safeStorageSet(GLOBAL_FONT_STORAGE, key);
