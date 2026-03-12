@@ -3111,27 +3111,17 @@ function buildCharacterMap(segments) {
 }
 
 function makeHistoryTitle(result) {
-  const source = result?.directors_view?.script_ko || "";
-  const actorLines = getValidActorLines(source);
+  const base = (
+    result?.input?.script_text
+    || result?.directors_view?.script_ko
+    || result?.input?.lyrics_text
+    || ""
+  )
+    .replace(/\s+/g, " ")
+    .trim();
 
-  let base = "";
-  if (actorLines.length) {
-    const cues = actorLines
-      .map((line) => extractCueContent(line))
-      .filter(Boolean)
-      .map((s) => s.replace(/["'“”‘’]/g, "").replace(/[()]/g, "").trim())
-      .filter(Boolean);
-    base = cues.slice(0, 2).join(" ");
-  }
-
-  if (!base) {
-    base = (result?.directors_view?.script_ko || "")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  if (!base) base = "스토리보드";
-  return truncateKorean(base, 30);
+  if (!base) return "스토리보드";
+  return truncateKorean(base, 20);
 }
 
 function truncateKorean(text, maxLen) {
