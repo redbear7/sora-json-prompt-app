@@ -2,7 +2,6 @@ const STORAGE_KEY = "sora_json_prompt_history_v1_3";
 const API_KEY_STORAGE = "sora_gemini_api_key";
 const SAMPLE_SCRIPT_STORAGE = "sora_script_sample_v1";
 const SAMPLE_LYRICS_STORAGE = "sora_musicvideo_sample_lyrics_v1";
-const SAMPLE_SCRIPT_STORAGE = "sora_script_sample_v1";
 const STYLE_SAMPLE_STORAGE = "sora_musicvideo_style_samples_v1";
 const STYLE_PROMPT_STORAGE = "sora_musicvideo_style_prompts_v1";
 const MUSIC_VIDEO_EXTERNAL_URL = "https://service-231233516128.us-west1.run.app/";
@@ -19,6 +18,7 @@ const GEMINI_FALLBACK_MODELS = [
   "gemini-1.5-flash"
 ];
 const IMAGE_MODEL_NAME = "nanobanana2";
+const volatileStorage = {};
 const GOOGLE_KR_FONT_MAP = {
   noto_sans_kr: "\"Noto Sans KR\", \"Pretendard Variable\", \"SUIT\", sans-serif",
   nanum_gothic: "\"Nanum Gothic\", \"Noto Sans KR\", sans-serif",
@@ -49,8 +49,6 @@ const el = {
   scriptHeightRange: document.getElementById("scriptHeightRange"),
   scriptHeightLabel: document.getElementById("scriptHeightLabel"),
   globalFontSelect: document.getElementById("globalFontSelect"),
-  saveSampleScriptBtn: document.getElementById("saveSampleScriptBtn"),
-  loadSampleScriptBtn: document.getElementById("loadSampleScriptBtn"),
   sampleScriptStatus: document.getElementById("sampleScriptStatus"),
   musicLyricsInput: document.getElementById("musicLyricsInput"),
   musicSynopsisInput: document.getElementById("musicSynopsisInput"),
@@ -130,11 +128,23 @@ const appState = {
 };
 
 function safeStorageGet(key) {
+  let value = null;
   try {
-    return localStorage.getItem(key);
+    value = localStorage.getItem(key);
+    if (value !== null) return value;
   } catch (_e) {
-    return null;
+    // Ignore and fallback.
   }
+  try {
+    value = sessionStorage.getItem(key);
+    if (value !== null) return value;
+  } catch (_e) {
+    // Ignore and fallback.
+  }
+  if (Object.prototype.hasOwnProperty.call(volatileStorage, key)) {
+    return volatileStorage[key];
+  }
+  return null;
 }
 
 function safeStorageSet(key, value) {
@@ -142,8 +152,16 @@ function safeStorageSet(key, value) {
     localStorage.setItem(key, value);
     return true;
   } catch (_e) {
-    return false;
+    // Ignore and fallback.
   }
+  try {
+    sessionStorage.setItem(key, value);
+    return true;
+  } catch (_e) {
+    // Ignore and fallback.
+  }
+  volatileStorage[key] = String(value ?? "");
+  return true;
 }
 
 function loadColumnRatio() {
@@ -344,8 +362,6 @@ function init() {
     }
     if (el.saveSampleLyricsBtn) el.saveSampleLyricsBtn.addEventListener("click", saveSampleLyrics);
     if (el.loadSampleLyricsBtn) el.loadSampleLyricsBtn.addEventListener("click", loadSampleLyrics);
-    if (el.saveSampleScriptBtn) el.saveSampleScriptBtn.addEventListener("click", saveSampleScript);
-    if (el.loadSampleScriptBtn) el.loadSampleScriptBtn.addEventListener("click", loadSampleScript);
     if (el.generateBtn) el.generateBtn.addEventListener("click", onGenerate);
     if (el.generateMusicKfBtn) el.generateMusicKfBtn.addEventListener("click", onGenerateMusicKf);
     if (el.generateMusicJsonBtn) el.generateMusicJsonBtn.addEventListener("click", onGenerateMusicJson);
