@@ -877,7 +877,7 @@ function buildResult({ inputMode, scriptText, musicLyricsText, musicStyleKey, mu
 
   const result = {
     meta: {
-      version: "1.4",
+      version: "1.5",
       project_id: `proj_${now.getTime()}`,
       created_at: now.toISOString(),
       text_model: getSavedGeminiApiKey() ? getCurrentGeminiModel() : "local-fallback",
