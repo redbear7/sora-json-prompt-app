@@ -88,6 +88,12 @@
             <option value="hi_melody">Hi Melody</option>
           </select>
         </div>
+        <label for="memoInput">메모</label>
+        <input id="memoInput" type="text" placeholder="메모 또는 링크를 입력하세요 (예: https://example.com)" />
+        <div class="action-row memo-action-row">
+          <button id="saveMemoBtn" class="btn ghost" type="button">메모 저장</button>
+        </div>
+        <div id="memoStatus" class="memo-status" aria-live="polite"></div>
         <div id="sampleScriptStatus" class="sample-script-status" aria-live="polite"></div>
         <div class="inline-meta">
           <span>글자수(공백 제외): <b id="charCount">0</b></span>

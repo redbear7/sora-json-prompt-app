@@ -41,6 +41,9 @@ const el = {
   referenceInputArea: document.getElementById("referenceInputArea"),
   musicVideoInputArea: document.getElementById("musicVideoInputArea"),
   scriptInput: document.getElementById("scriptInput"),
+  memoInput: document.getElementById("memoInput"),
+  saveMemoBtn: document.getElementById("saveMemoBtn"),
+  memoStatus: document.getElementById("memoStatus"),
   saveSampleScriptBtn: document.getElementById("saveSampleScriptBtn"),
   loadSampleScriptBtn: document.getElementById("loadSampleScriptBtn"),
   scriptFontSizeRange: document.getElementById("scriptFontSizeRange"),
@@ -310,6 +313,12 @@ function init() {
       });
       el.scriptInput.addEventListener("focus", expandScriptInputPreserveViewport);
     }
+    if (el.memoInput) {
+      el.memoInput.addEventListener("input", saveCurrentTabState);
+    }
+    if (el.saveMemoBtn) {
+      el.saveMemoBtn.addEventListener("click", onSaveMemoToHistory);
+    }
     if (el.scriptFontSizeRange) {
       el.scriptFontSizeRange.addEventListener("input", () => {
         applyScriptFontSize(Number(el.scriptFontSizeRange.value || 16), true);
@@ -562,6 +571,7 @@ async function onGenerate() {
 
   const inputMode = appState.inputMode;
   let scriptText = sanitizeScriptNoise(String(el.scriptInput.value || "")).trim();
+  const memoText = (el.memoInput?.value || "").trim();
   const musicLyricsText = (el.musicLyricsInput?.value || "").trim();
   const musicSynopsisInputText = (el.musicSynopsisInput?.value || "").trim();
   const musicStyleKey = (el.musicStyleSelect?.value || "ja_anime_cinematic").trim();
@@ -651,6 +661,7 @@ async function onGenerate() {
     const result = buildResult({
       inputMode,
       scriptText,
+      memoText,
       musicLyricsText,
       musicStyleKey,
       musicStyleLabel: musicStylePreset.label,
@@ -704,6 +715,7 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
   const musicStoryOption = (el.musicStorySelect?.value || "1").trim();
   const musicStoryCustom = (el.musicStoryCustomInput?.value || "").trim();
   const kfStyleNote = (el.kfStyleInput?.value || "").trim();
+  const memoText = (el.memoInput?.value || "").trim();
   const runtime = el.runtimeSelect.value;
 
   if (!musicLyricsText) {
@@ -748,6 +760,7 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
     const result = buildResult({
       inputMode: "musicvideo",
       scriptText: "",
+      memoText,
       musicLyricsText,
       musicStyleKey,
       musicStyleLabel: musicStylePreset.label,
@@ -815,7 +828,7 @@ async function simulateProgress(withContactSheet, withKeyframes = true) {
   }
 }
 
-function buildResult({ inputMode, scriptText, musicLyricsText, musicStyleKey, musicStyleLabel, musicStoryOption, musicStoryCustom, musicSynopsisInputText, referenceImageDataUrl, referenceImagePrompt, kfStyleNote, settings, kfCount, scriptAnalysis, musicAnalysis }) {
+function buildResult({ inputMode, scriptText, memoText, musicLyricsText, musicStyleKey, musicStyleLabel, musicStoryOption, musicStoryCustom, musicSynopsisInputText, referenceImageDataUrl, referenceImagePrompt, kfStyleNote, settings, kfCount, scriptAnalysis, musicAnalysis }) {
   const now = new Date();
   const charCount = scriptText.replace(/\s+/g, "").length;
   const totalSec = settings.runtime === "15s"
@@ -888,6 +901,7 @@ function buildResult({ inputMode, scriptText, musicLyricsText, musicStyleKey, mu
     },
     input: {
       input_mode: inputMode,
+      memo_text: memoText || "",
       ...(inputMode === "script"
         ? { script_text: scriptText }
         : inputMode === "musicvideo"
@@ -1223,9 +1237,11 @@ function setCopyButtonState(copied) {
 function saveHistory(result) {
   const list = loadHistory();
   const title = makeHistoryTitle(result);
+  const memoText = String(result?.input?.memo_text || "").trim();
   list.unshift({
     project_id: result.meta.project_id,
     title,
+    memo_text: memoText,
     created_at: result.meta.created_at,
     input_mode: result.input.input_mode,
     runtime: `${result.keyframe_plan?.timeline_sec || 0}s`,
@@ -1262,17 +1278,23 @@ function renderHistory() {
 
   const sections = modes.map((mode) => {
     const items = history.filter((item) => item.input_mode === mode.key);
-    const renderItems = (list) => list.map((item) => `
+    const renderItems = (list) => list.map((item) => {
+      const memo = String(item.memo_text || item.payload?.input?.memo_text || "").trim();
+      const memoLink = extractFirstHttpUrl(memo);
+      return `
           <div class="history-item">
             <div>
               <button data-project-id="${item.project_id}" class="history-title-btn">${escapeHtml(item.title || item.project_id)}</button>
               <div>${new Date(item.created_at).toLocaleString()} | ${item.runtime} | KF ${item.kf_count}</div>
+              ${memo ? `<div class="history-memo">${renderMemoWithHyperlinks(memo)}</div>` : ""}
             </div>
             <div class="history-actions">
+              ${memoLink ? `<button class="btn ghost history-link-btn" data-open-url="${escapeHtml(memoLink)}">열기</button>` : ""}
               <button class="btn ghost danger history-delete-btn" data-delete-project-id="${item.project_id}">삭제</button>
             </div>
           </div>
-        `).join("");
+        `;
+    }).join("");
 
     let body = "";
     if (!items.length) {
@@ -1321,6 +1343,15 @@ function renderHistory() {
     });
   });
 
+  el.historyList.querySelectorAll(".history-link-btn[data-open-url]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const url = btn.dataset.openUrl || "";
+      if (!url) return;
+      window.open(url, "_blank", "noopener,noreferrer");
+    });
+  });
+
   el.historyList.querySelectorAll(".history-delete-btn[data-delete-project-id]").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -1336,6 +1367,32 @@ function deleteHistoryItem(projectId) {
   const next = list.filter((item) => item.project_id !== projectId);
   safeStorageSet(STORAGE_KEY, JSON.stringify(next));
   renderHistory();
+}
+
+function onSaveMemoToHistory() {
+  const memo = (el.memoInput?.value || "").trim();
+  saveCurrentTabState();
+
+  if (!appState.lastResult?.meta?.project_id) {
+    setMemoStatus("메모 저장됨. 다음 생성 시 히스토리에 반영됩니다.", "ok");
+    return;
+  }
+
+  const projectId = appState.lastResult.meta.project_id;
+  appState.lastResult.input = appState.lastResult.input || {};
+  appState.lastResult.input.memo_text = memo;
+
+  const list = loadHistory();
+  const next = list.map((item) => {
+    if (item.project_id !== projectId) return item;
+    const payload = item.payload ? JSON.parse(JSON.stringify(item.payload)) : {};
+    payload.input = payload.input || {};
+    payload.input.memo_text = memo;
+    return { ...item, memo_text: memo, payload };
+  });
+  safeStorageSet(STORAGE_KEY, JSON.stringify(next));
+  renderHistory();
+  setMemoStatus("메모가 히스토리에 적용되었습니다.", "ok");
 }
 
 async function saveApiKey() {
@@ -1681,6 +1738,8 @@ function applyImageModelTag(result) {
 
 function resetAll() {
   el.scriptInput.value = "";
+  if (el.memoInput) el.memoInput.value = "";
+  if (el.memoStatus) el.memoStatus.textContent = "";
   if (el.musicLyricsInput) el.musicLyricsInput.value = "";
   if (el.musicSynopsisInput) el.musicSynopsisInput.value = "";
   if (el.musicStyleSelect) el.musicStyleSelect.value = "ja_anime_cinematic";
@@ -1754,6 +1813,7 @@ function createInitialTabStates() {
   return {
     script: {
       scriptText: "",
+      memoText: "",
       runtime: "15s",
       bgm: false,
       vfx: false,
@@ -1766,6 +1826,7 @@ function createInitialTabStates() {
       referenceImageDataUrl: "",
       referencePrompt: "",
       kfStyleNote: "",
+      memoText: "",
       runtime: "directors_cut",
       bgm: false,
       vfx: false,
@@ -1777,6 +1838,7 @@ function createInitialTabStates() {
     musicvideo: {
       lyricsText: "",
       synopsisText: "",
+      memoText: "",
       styleKey: "ja_anime_cinematic",
       storyOption: "1",
       storyCustom: "",
@@ -1797,6 +1859,7 @@ function saveCurrentTabState() {
   if (!state) return;
 
   state.runtime = el.runtimeSelect.value;
+  state.memoText = el.memoInput?.value || "";
   state.bgm = el.bgmToggle.checked;
   state.vfx = el.vfxToggle.checked;
   state.sfx = el.sfxToggle.checked;
@@ -1825,6 +1888,7 @@ function loadTabState(mode) {
 
   const defaultRuntime = mode === "script" ? "15s" : "directors_cut";
   el.runtimeSelect.value = state.runtime || defaultRuntime;
+  if (el.memoInput) el.memoInput.value = state.memoText || "";
   el.bgmToggle.checked = !!state.bgm;
   el.vfxToggle.checked = !!state.vfx;
   el.sfxToggle.checked = !!state.sfx;
@@ -1870,6 +1934,7 @@ function applyLoadedResultToInputs(result) {
       ? "musicvideo"
       : "script";
   setInputMode(mode);
+  if (el.memoInput) el.memoInput.value = result?.input?.memo_text || "";
 
   if (el.bgmToggle) el.bgmToggle.checked = !!result?.settings?.effects?.bgm;
   if (el.vfxToggle) el.vfxToggle.checked = !!result?.settings?.effects?.vfx;
@@ -2291,6 +2356,15 @@ function setSampleScriptStatus(message, tone = "") {
   }
 }
 
+function setMemoStatus(message, tone = "") {
+  if (!el.memoStatus) return;
+  el.memoStatus.textContent = String(message || "");
+  el.memoStatus.classList.remove("ok", "warn");
+  if (tone === "ok" || tone === "warn") {
+    el.memoStatus.classList.add(tone);
+  }
+}
+
 function loadSampleLyrics() {
   const saved = safeStorageGet(SAMPLE_LYRICS_STORAGE);
   if (!saved) {
@@ -2709,6 +2783,7 @@ function syncLiveScriptEditorToKeyframes(nextText, mode) {
     rebuilt = buildResult({
       inputMode: "script",
       scriptText,
+      memoText: prev?.input?.memo_text || "",
       musicLyricsText: "",
       musicStyleKey: "",
       musicStyleLabel: "",
@@ -2732,6 +2807,7 @@ function syncLiveScriptEditorToKeyframes(nextText, mode) {
     rebuilt = buildResult({
       inputMode: "musicvideo",
       scriptText: "",
+      memoText: prev?.input?.memo_text || "",
       musicLyricsText: lyricsText,
       musicStyleKey: prev?.input?.music_style_key || "ja_anime_cinematic",
       musicStyleLabel: prev?.input?.music_style_label || getMusicStylePreset(prev?.input?.music_style_key || "ja_anime_cinematic").label,
@@ -3128,6 +3204,32 @@ function truncateKorean(text, maxLen) {
   const chars = Array.from(text || "");
   if (chars.length <= maxLen) return text;
   return `${chars.slice(0, maxLen).join("")}...`;
+}
+
+function extractFirstHttpUrl(text) {
+  const match = String(text || "").match(/https?:\/\/[^\s]+/i);
+  if (!match) return "";
+  return normalizeHttpUrl(match[0]);
+}
+
+function normalizeHttpUrl(raw) {
+  try {
+    const url = new URL(String(raw || "").trim());
+    return /^https?:$/i.test(url.protocol) ? url.toString() : "";
+  } catch (_e) {
+    return "";
+  }
+}
+
+function renderMemoWithHyperlinks(text) {
+  const source = String(text || "");
+  const parts = source.split(/(https?:\/\/[^\s]+)/gi);
+  return parts.map((part) => {
+    const normalized = normalizeHttpUrl(part);
+    if (!normalized) return escapeHtml(part);
+    const safeUrl = escapeHtml(normalized);
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
+  }).join("");
 }
 
 function escapeHtml(str) {
