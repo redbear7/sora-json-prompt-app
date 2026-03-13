@@ -9,6 +9,8 @@ const SCRIPT_FONT_SIZE_STORAGE = "sora_script_font_size_v1";
 const SCRIPT_HEIGHT_STORAGE = "sora_script_input_height_v1";
 const SCRIPT_HEIGHT_STEPS = [280, 360, 460, 580, 720];
 const GLOBAL_FONT_STORAGE = "sora_global_font_v1";
+const APP_VERSION = "1.6";
+const OPEN_SOURCE_REPO = "redbear7/sora-json-prompt-app";
 const GEMINI_TEXT_MODEL = "gemini-3.0-flash";
 const GEMINI_MODEL_STORAGE = "sora_gemini_active_model_v1";
 const GEMINI_FALLBACK_MODELS = [
@@ -322,6 +324,68 @@ function setStatusMessage(message, { level = "INFO", resetProgress = false } = {
   appendTerminalLog(level, text);
 }
 
+function parseVersionParts(versionRaw) {
+  const clean = String(versionRaw || "").trim().replace(/^v/i, "");
+  const parts = clean.split(".").map((p) => Number(p.replace(/[^\d]/g, ""))).filter((n) => Number.isFinite(n));
+  if (!parts.length) return [0];
+  return parts;
+}
+
+function compareVersions(aRaw, bRaw) {
+  const a = parseVersionParts(aRaw);
+  const b = parseVersionParts(bRaw);
+  const maxLen = Math.max(a.length, b.length);
+  for (let i = 0; i < maxLen; i += 1) {
+    const av = a[i] || 0;
+    const bv = b[i] || 0;
+    if (av > bv) return 1;
+    if (av < bv) return -1;
+  }
+  return 0;
+}
+
+async function fetchLatestOpenSourceVersion() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const releaseRes = await fetch(`https://api.github.com/repos/${OPEN_SOURCE_REPO}/releases/latest`, {
+      signal: controller.signal
+    });
+    if (releaseRes.ok) {
+      const releaseJson = await releaseRes.json();
+      const tagName = String(releaseJson?.tag_name || "").trim();
+      if (tagName) return tagName;
+    }
+
+    const tagsRes = await fetch(`https://api.github.com/repos/${OPEN_SOURCE_REPO}/tags?per_page=1`, {
+      signal: controller.signal
+    });
+    if (!tagsRes.ok) return "";
+    const tagsJson = await tagsRes.json();
+    const firstTag = Array.isArray(tagsJson) ? tagsJson[0] : null;
+    return String(firstTag?.name || "").trim();
+  } catch (_e) {
+    return "";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function checkOpenSourceLatestVersion() {
+  appendTerminalLog("INFO", `오픈소스 최신 버전 확인 중... (${OPEN_SOURCE_REPO})`);
+  const latest = await fetchLatestOpenSourceVersion();
+  if (!latest) {
+    appendTerminalLog("WARN", "오픈소스 최신 버전 확인 실패 (네트워크/권한 문제 가능)");
+    return;
+  }
+  const cmp = compareVersions(APP_VERSION, latest);
+  if (cmp < 0) {
+    appendTerminalLog("WARN", `업데이트 가능: 현재 v${APP_VERSION} / 최신 ${latest}`);
+    return;
+  }
+  appendTerminalLog("OK", `최신 버전 사용 중: v${APP_VERSION} (원격 ${latest})`);
+}
+
 window.addEventListener("error", (event) => {
   setStatusMessage(`오류: ${event.message || "알 수 없는 오류"}`, { level: "ERROR" });
   appState.isGenerating = false;
@@ -451,6 +515,7 @@ function init() {
     applyGlobalFont(appState.globalFontKey, false);
     notifyGenerateBlocked("대기 중");
     appendTerminalLog("INFO", "앱 초기화 완료");
+    void checkOpenSourceLatestVersion();
   } catch (e) {
     notifyGenerateBlocked(`초기화 오류: ${e?.message || "알 수 없음"}`);
   } finally {
