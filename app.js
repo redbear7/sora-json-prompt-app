@@ -4,7 +4,6 @@ const SAMPLE_SCRIPT_STORAGE = "sora_script_sample_v1";
 const SAMPLE_LYRICS_STORAGE = "sora_musicvideo_sample_lyrics_v1";
 const STYLE_SAMPLE_STORAGE = "sora_musicvideo_style_samples_v1";
 const STYLE_PROMPT_STORAGE = "sora_musicvideo_style_prompts_v1";
-const MUSIC_VIDEO_EXTERNAL_URL = "https://service-231233516128.us-west1.run.app/";
 const COLUMN_RATIO_STORAGE = "sora_layout_left_col_ratio_v1";
 const SCRIPT_FONT_SIZE_STORAGE = "sora_script_font_size_v1";
 const SCRIPT_HEIGHT_STORAGE = "sora_script_input_height_v1";
@@ -42,6 +41,7 @@ const el = {
   musicVideoInputArea: document.getElementById("musicVideoInputArea"),
   scriptInput: document.getElementById("scriptInput"),
   memoInput: document.getElementById("memoInput"),
+  soraLinkInput: document.getElementById("soraLinkInput"),
   saveMemoBtn: document.getElementById("saveMemoBtn"),
   memoStatus: document.getElementById("memoStatus"),
   saveSampleScriptBtn: document.getElementById("saveSampleScriptBtn"),
@@ -298,13 +298,8 @@ window.addEventListener("unhandledrejection", (event) => {
 
 function init() {
   try {
-    if (el.scriptTab) el.scriptTab.addEventListener("click", () => onTabClick("script"));
+    if (el.scriptTab) el.scriptTab.addEventListener("click", resetToIdleMode);
     if (el.referenceTab) el.referenceTab.addEventListener("click", () => onTabClick("reference"));
-    if (el.musicVideoTab) {
-      el.musicVideoTab.addEventListener("click", () => {
-        window.open(MUSIC_VIDEO_EXTERNAL_URL, "_blank", "noopener,noreferrer");
-      });
-    }
     if (el.appTitle) el.appTitle.addEventListener("click", resetToIdleMode);
     if (el.scriptInput) {
       el.scriptInput.addEventListener("input", () => {
@@ -315,6 +310,9 @@ function init() {
     }
     if (el.memoInput) {
       el.memoInput.addEventListener("input", saveCurrentTabState);
+    }
+    if (el.soraLinkInput) {
+      el.soraLinkInput.addEventListener("input", saveCurrentTabState);
     }
     if (el.saveMemoBtn) {
       el.saveMemoBtn.addEventListener("click", onSaveMemoToHistory);
@@ -572,6 +570,7 @@ async function onGenerate() {
   const inputMode = appState.inputMode;
   let scriptText = sanitizeScriptNoise(String(el.scriptInput.value || "")).trim();
   const memoText = (el.memoInput?.value || "").trim();
+  const soraLinkText = (el.soraLinkInput?.value || "").trim();
   const musicLyricsText = (el.musicLyricsInput?.value || "").trim();
   const musicSynopsisInputText = (el.musicSynopsisInput?.value || "").trim();
   const musicStyleKey = (el.musicStyleSelect?.value || "ja_anime_cinematic").trim();
@@ -662,6 +661,7 @@ async function onGenerate() {
       inputMode,
       scriptText,
       memoText,
+      soraLinkText,
       musicLyricsText,
       musicStyleKey,
       musicStyleLabel: musicStylePreset.label,
@@ -716,6 +716,7 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
   const musicStoryCustom = (el.musicStoryCustomInput?.value || "").trim();
   const kfStyleNote = (el.kfStyleInput?.value || "").trim();
   const memoText = (el.memoInput?.value || "").trim();
+  const soraLinkText = (el.soraLinkInput?.value || "").trim();
   const runtime = el.runtimeSelect.value;
 
   if (!musicLyricsText) {
@@ -761,6 +762,7 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
       inputMode: "musicvideo",
       scriptText: "",
       memoText,
+      soraLinkText,
       musicLyricsText,
       musicStyleKey,
       musicStyleLabel: musicStylePreset.label,
@@ -828,7 +830,7 @@ async function simulateProgress(withContactSheet, withKeyframes = true) {
   }
 }
 
-function buildResult({ inputMode, scriptText, memoText, musicLyricsText, musicStyleKey, musicStyleLabel, musicStoryOption, musicStoryCustom, musicSynopsisInputText, referenceImageDataUrl, referenceImagePrompt, kfStyleNote, settings, kfCount, scriptAnalysis, musicAnalysis }) {
+function buildResult({ inputMode, scriptText, memoText, soraLinkText, musicLyricsText, musicStyleKey, musicStyleLabel, musicStoryOption, musicStoryCustom, musicSynopsisInputText, referenceImageDataUrl, referenceImagePrompt, kfStyleNote, settings, kfCount, scriptAnalysis, musicAnalysis }) {
   const now = new Date();
   const charCount = scriptText.replace(/\s+/g, "").length;
   const totalSec = settings.runtime === "15s"
@@ -893,7 +895,7 @@ function buildResult({ inputMode, scriptText, memoText, musicLyricsText, musicSt
 
   const result = {
     meta: {
-      version: "1.5",
+      version: "1.6",
       project_id: `proj_${now.getTime()}`,
       created_at: now.toISOString(),
       text_model: getSavedGeminiApiKey() ? getCurrentGeminiModel() : "local-fallback",
@@ -902,6 +904,7 @@ function buildResult({ inputMode, scriptText, memoText, musicLyricsText, musicSt
     input: {
       input_mode: inputMode,
       memo_text: memoText || "",
+      sora2_link: normalizeHttpUrl(soraLinkText || ""),
       ...(inputMode === "script"
         ? { script_text: scriptText }
         : inputMode === "musicvideo"
@@ -1238,10 +1241,12 @@ function saveHistory(result) {
   const list = loadHistory();
   const title = makeHistoryTitle(result);
   const memoText = String(result?.input?.memo_text || "").trim();
+  const sora2Link = String(result?.input?.sora2_link || "").trim();
   list.unshift({
     project_id: result.meta.project_id,
     title,
     memo_text: memoText,
+    sora2_link: sora2Link,
     created_at: result.meta.created_at,
     input_mode: result.input.input_mode,
     runtime: `${result.keyframe_plan?.timeline_sec || 0}s`,
@@ -1280,15 +1285,19 @@ function renderHistory() {
     const items = history.filter((item) => item.input_mode === mode.key);
     const renderItems = (list) => list.map((item) => {
       const memo = String(item.memo_text || item.payload?.input?.memo_text || "").trim();
+      const sora2Link = normalizeHttpUrl(String(item.sora2_link || item.payload?.input?.sora2_link || "").trim());
       const memoLink = extractFirstHttpUrl(memo);
-      return `
+      const displayTitle = makeHistoryTitle(item.payload || item) || item.title || item.project_id;
+        return `
           <div class="history-item">
-            <div>
-              <button data-project-id="${item.project_id}" class="history-title-btn">${escapeHtml(item.title || item.project_id)}</button>
+            <div class="history-main">
+              <button data-project-id="${item.project_id}" class="history-title-btn">${escapeHtml(displayTitle)}</button>
               <div>${new Date(item.created_at).toLocaleString()} | ${item.runtime} | KF ${item.kf_count}</div>
+              ${sora2Link ? `<div class="history-memo">소라2: <a href="${escapeHtml(sora2Link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(sora2Link)}</a></div>` : ""}
               ${memo ? `<div class="history-memo">${renderMemoWithHyperlinks(memo)}</div>` : ""}
             </div>
             <div class="history-actions">
+              ${sora2Link ? `<button class="btn ghost history-link-btn" data-open-url="${escapeHtml(sora2Link)}">소라2 열기</button>` : ""}
               ${memoLink ? `<button class="btn ghost history-link-btn" data-open-url="${escapeHtml(memoLink)}">열기</button>` : ""}
               <button class="btn ghost danger history-delete-btn" data-delete-project-id="${item.project_id}">삭제</button>
             </div>
@@ -1371,6 +1380,7 @@ function deleteHistoryItem(projectId) {
 
 function onSaveMemoToHistory() {
   const memo = (el.memoInput?.value || "").trim();
+  const sora2Link = normalizeHttpUrl((el.soraLinkInput?.value || "").trim());
   saveCurrentTabState();
 
   if (!appState.lastResult?.meta?.project_id) {
@@ -1381,6 +1391,7 @@ function onSaveMemoToHistory() {
   const projectId = appState.lastResult.meta.project_id;
   appState.lastResult.input = appState.lastResult.input || {};
   appState.lastResult.input.memo_text = memo;
+  appState.lastResult.input.sora2_link = sora2Link;
 
   const list = loadHistory();
   const next = list.map((item) => {
@@ -1388,7 +1399,8 @@ function onSaveMemoToHistory() {
     const payload = item.payload ? JSON.parse(JSON.stringify(item.payload)) : {};
     payload.input = payload.input || {};
     payload.input.memo_text = memo;
-    return { ...item, memo_text: memo, payload };
+    payload.input.sora2_link = sora2Link;
+    return { ...item, memo_text: memo, sora2_link: sora2Link, payload };
   });
   safeStorageSet(STORAGE_KEY, JSON.stringify(next));
   renderHistory();
@@ -1739,6 +1751,7 @@ function applyImageModelTag(result) {
 function resetAll() {
   el.scriptInput.value = "";
   if (el.memoInput) el.memoInput.value = "";
+  if (el.soraLinkInput) el.soraLinkInput.value = "";
   if (el.memoStatus) el.memoStatus.textContent = "";
   if (el.musicLyricsInput) el.musicLyricsInput.value = "";
   if (el.musicSynopsisInput) el.musicSynopsisInput.value = "";
@@ -1814,6 +1827,7 @@ function createInitialTabStates() {
     script: {
       scriptText: "",
       memoText: "",
+      soraLinkText: "",
       runtime: "15s",
       bgm: false,
       vfx: false,
@@ -1827,6 +1841,7 @@ function createInitialTabStates() {
       referencePrompt: "",
       kfStyleNote: "",
       memoText: "",
+      soraLinkText: "",
       runtime: "directors_cut",
       bgm: false,
       vfx: false,
@@ -1839,6 +1854,7 @@ function createInitialTabStates() {
       lyricsText: "",
       synopsisText: "",
       memoText: "",
+      soraLinkText: "",
       styleKey: "ja_anime_cinematic",
       storyOption: "1",
       storyCustom: "",
@@ -1860,6 +1876,7 @@ function saveCurrentTabState() {
 
   state.runtime = el.runtimeSelect.value;
   state.memoText = el.memoInput?.value || "";
+  state.soraLinkText = el.soraLinkInput?.value || "";
   state.bgm = el.bgmToggle.checked;
   state.vfx = el.vfxToggle.checked;
   state.sfx = el.sfxToggle.checked;
@@ -1889,6 +1906,7 @@ function loadTabState(mode) {
   const defaultRuntime = mode === "script" ? "15s" : "directors_cut";
   el.runtimeSelect.value = state.runtime || defaultRuntime;
   if (el.memoInput) el.memoInput.value = state.memoText || "";
+  if (el.soraLinkInput) el.soraLinkInput.value = state.soraLinkText || "";
   el.bgmToggle.checked = !!state.bgm;
   el.vfxToggle.checked = !!state.vfx;
   el.sfxToggle.checked = !!state.sfx;
@@ -1935,6 +1953,7 @@ function applyLoadedResultToInputs(result) {
       : "script";
   setInputMode(mode);
   if (el.memoInput) el.memoInput.value = result?.input?.memo_text || "";
+  if (el.soraLinkInput) el.soraLinkInput.value = result?.input?.sora2_link || "";
 
   if (el.bgmToggle) el.bgmToggle.checked = !!result?.settings?.effects?.bgm;
   if (el.vfxToggle) el.vfxToggle.checked = !!result?.settings?.effects?.vfx;
@@ -2784,6 +2803,7 @@ function syncLiveScriptEditorToKeyframes(nextText, mode) {
       inputMode: "script",
       scriptText,
       memoText: prev?.input?.memo_text || "",
+      soraLinkText: prev?.input?.sora2_link || "",
       musicLyricsText: "",
       musicStyleKey: "",
       musicStyleLabel: "",
@@ -2808,6 +2828,7 @@ function syncLiveScriptEditorToKeyframes(nextText, mode) {
       inputMode: "musicvideo",
       scriptText: "",
       memoText: prev?.input?.memo_text || "",
+      soraLinkText: prev?.input?.sora2_link || "",
       musicLyricsText: lyricsText,
       musicStyleKey: prev?.input?.music_style_key || "ja_anime_cinematic",
       musicStyleLabel: prev?.input?.music_style_label || getMusicStylePreset(prev?.input?.music_style_key || "ja_anime_cinematic").label,
@@ -3191,13 +3212,14 @@ function makeHistoryTitle(result) {
     result?.input?.script_text
     || result?.directors_view?.script_ko
     || result?.input?.lyrics_text
+    || result?.title
     || ""
   )
     .replace(/\s+/g, " ")
     .trim();
 
   if (!base) return "스토리보드";
-  return truncateKorean(base, 20);
+  return base;
 }
 
 function truncateKorean(text, maxLen) {
