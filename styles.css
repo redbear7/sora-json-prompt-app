@@ -432,6 +432,13 @@ label { display: grid; gap: 6px; font-size: 0.94rem; }
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.action-row.main-controls {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 
 .font-size-control {
@@ -452,6 +459,47 @@ label { display: grid; gap: 6px; font-size: 0.94rem; }
   font-size: 0.86rem;
   color: var(--muted);
   min-width: 44px;
+}
+
+.font-size-control.inline {
+  margin: 0 0 0 8px;
+  gap: 6px;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.font-size-control.inline label {
+  font-size: 0.8rem;
+}
+
+.font-size-control.inline #scriptFontSizeRange,
+.font-size-control.inline #scriptHeightRange {
+  width: 120px;
+  flex: 0 0 120px;
+}
+
+.font-size-control.inline span {
+  min-width: 42px;
+}
+
+.slider-controls {
+  padding-left: 4px;
+  border-left: 1px solid rgba(140, 165, 204, 0.28);
+}
+
+.inline-meta.inline-meta-compact {
+  margin: 0 0 0 6px;
+  gap: 6px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.runtime-meta-line {
+  white-space: nowrap;
+}
+
+#charCount {
+  color: #f0c24b;
 }
 
 #scriptFontSizeRange,
@@ -744,6 +792,18 @@ pre {
   .history-panel { top: 78px; height: calc(100vh - 88px); }
   .col-resizer { display: none; }
   .result-grid { grid-template-columns: 1fr; }
+  .font-size-control.inline {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+  .action-row.main-controls {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+  .slider-controls {
+    border-left: none;
+    padding-left: 0;
+  }
 }
 
 /* Theme Upgrade: Neo Glass Panel */

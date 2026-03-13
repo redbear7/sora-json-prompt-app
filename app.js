@@ -7,6 +7,7 @@ const STYLE_PROMPT_STORAGE = "sora_musicvideo_style_prompts_v1";
 const COLUMN_RATIO_STORAGE = "sora_layout_left_col_ratio_v1";
 const SCRIPT_FONT_SIZE_STORAGE = "sora_script_font_size_v1";
 const SCRIPT_HEIGHT_STORAGE = "sora_script_input_height_v1";
+const SCRIPT_HEIGHT_STEPS = [280, 360, 460, 580, 720];
 const GLOBAL_FONT_STORAGE = "sora_global_font_v1";
 const GEMINI_TEXT_MODEL = "gemini-3.0-flash";
 const GEMINI_MODEL_STORAGE = "sora_gemini_active_model_v1";
@@ -70,7 +71,6 @@ const el = {
   referencePrompt: document.getElementById("referencePrompt"),
   kfStyleInput: document.getElementById("kfStyleInput"),
   charCount: document.getElementById("charCount"),
-  autoKfCount: document.getElementById("autoKfCount"),
   lyricsLineCount: document.getElementById("lyricsLineCount"),
   lyricsKfCount: document.getElementById("lyricsKfCount"),
   runtimeLockHint: document.getElementById("runtimeLockHint"),
@@ -226,8 +226,24 @@ function loadScriptFontSize() {
 
 function loadScriptInputHeight() {
   const raw = Number(safeStorageGet(SCRIPT_HEIGHT_STORAGE));
-  if (Number.isFinite(raw) && raw >= 220 && raw <= 1000) return raw;
-  return 360;
+  if (Number.isFinite(raw)) {
+    // New format: 1..5 step index
+    if (raw >= 1 && raw <= SCRIPT_HEIGHT_STEPS.length) return Math.round(raw);
+    // Legacy format: pixel value
+    if (raw >= 220 && raw <= 1000) {
+      let nearest = 1;
+      let minDiff = Number.POSITIVE_INFINITY;
+      SCRIPT_HEIGHT_STEPS.forEach((px, idx) => {
+        const diff = Math.abs(px - raw);
+        if (diff < minDiff) {
+          minDiff = diff;
+          nearest = idx + 1;
+        }
+      });
+      return nearest;
+    }
+  }
+  return 2;
 }
 
 function loadGlobalFontKey() {
@@ -258,13 +274,15 @@ function applyScriptFontSize(size, persist = true) {
   if (persist) safeStorageSet(SCRIPT_FONT_SIZE_STORAGE, String(px));
 }
 
-function applyScriptInputHeight(height, persist = true) {
-  const px = Math.max(220, Math.min(1000, Number(height) || 360));
+function applyScriptInputHeight(step, persist = true) {
+  const numeric = Number(step);
+  const level = Math.max(1, Math.min(SCRIPT_HEIGHT_STEPS.length, Number.isFinite(numeric) ? Math.round(numeric) : 2));
+  const px = SCRIPT_HEIGHT_STEPS[level - 1];
   if (el.scriptInput) el.scriptInput.style.height = `${px}px`;
-  if (el.scriptHeightRange) el.scriptHeightRange.value = String(px);
-  if (el.scriptHeightLabel) el.scriptHeightLabel.textContent = `${px}px`;
-  appState.scriptInputHeight = px;
-  if (persist) safeStorageSet(SCRIPT_HEIGHT_STORAGE, String(px));
+  if (el.scriptHeightRange) el.scriptHeightRange.value = String(level);
+  if (el.scriptHeightLabel) el.scriptHeightLabel.textContent = `${px}px (${level}/5)`;
+  appState.scriptInputHeight = level;
+  if (persist) safeStorageSet(SCRIPT_HEIGHT_STORAGE, String(level));
 }
 
 function applyGlobalFont(fontKey, persist = true) {
@@ -345,7 +363,7 @@ function init() {
     }
     if (el.scriptHeightRange) {
       el.scriptHeightRange.addEventListener("input", () => {
-        applyScriptInputHeight(Number(el.scriptHeightRange.value || 360), true);
+        applyScriptInputHeight(Number(el.scriptHeightRange.value || 2), true);
       });
     }
     if (el.globalFontSelect) {
@@ -497,9 +515,7 @@ function onTabClick(mode) {
 function updateScriptMetrics() {
   const text = el.scriptInput.value || "";
   const charCount = text.replace(/\s+/g, "").length;
-  const analysis = analyzeScript(text);
   el.charCount.textContent = String(charCount);
-  el.autoKfCount.textContent = String(analysis.kfCount);
 
   if (el.musicLyricsInput && el.lyricsLineCount && el.lyricsKfCount) {
     const mv = analyzeMusicLyrics(el.musicLyricsInput.value || "");
@@ -2753,7 +2769,7 @@ function autoGrowTextarea() {
 function autoGrowScriptInput() {
   const t = el.scriptInput;
   if (!t) return;
-  applyScriptInputHeight(appState.scriptInputHeight || 360, false);
+  applyScriptInputHeight(appState.scriptInputHeight || 2, false);
 }
 
 function setScriptInputCollapsed(collapsed) {
