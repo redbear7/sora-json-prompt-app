@@ -280,9 +280,8 @@ textarea {
 }
 
 #memoInput {
-  display: block;
   width: 100%;
-  max-width: 980px;
+  max-width: none;
 }
 
 .script-sample-row {
@@ -318,8 +317,19 @@ textarea {
   color: #f0c24b;
 }
 
-.memo-action-row {
+.memo-inline-row {
   margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.memo-inline-row #memoInput {
+  flex: 1 1 auto;
+}
+
+.memo-inline-row #saveMemoBtn {
+  flex: 0 0 auto;
 }
 
 .memo-status {
@@ -655,4 +665,114 @@ pre {
   .history-panel { top: 78px; height: calc(100vh - 88px); }
   .col-resizer { display: none; }
   .result-grid { grid-template-columns: 1fr; }
+}
+
+/* Theme Upgrade: Neo Glass Panel */
+:root {
+  --bg-0: #040910;
+  --bg-1: #101d33;
+  --panel: rgba(16, 28, 48, 0.58);
+  --line: rgba(182, 208, 246, 0.24);
+  --line-soft: rgba(182, 208, 246, 0.14);
+  --text: #edf4ff;
+  --muted: #9fb2cd;
+  --accent: #32e1ab;
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(80, 195, 255, 0.15), transparent 36%),
+    radial-gradient(circle at 86% 82%, rgba(50, 225, 171, 0.12), transparent 34%),
+    linear-gradient(145deg, var(--bg-0), var(--bg-1));
+}
+
+.bg-layer {
+  background-image:
+    linear-gradient(0deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.app-header,
+.panel {
+  border-color: var(--line);
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 20px 42px rgba(0, 0, 0, 0.30);
+}
+
+input, select, textarea, .btn {
+  border-color: var(--line-soft);
+  background: rgba(7, 13, 24, 0.72);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: rgba(118, 185, 255, 0.62);
+  box-shadow: 0 0 0 3px rgba(118, 185, 255, 0.18);
+}
+
+.tab {
+  border: 1px solid var(--line-soft);
+  background: rgba(8, 14, 25, 0.55);
+}
+
+.tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(50, 225, 171, 0.13);
+  box-shadow: inset 0 0 0 1px rgba(50, 225, 171, 0.25);
+}
+
+.toggle {
+  background: rgba(7, 13, 24, 0.68);
+  border-color: var(--line-soft);
+}
+
+.btn {
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(182, 208, 246, 0.42);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.24);
+}
+
+.btn.primary {
+  background: linear-gradient(135deg, #34e2ac, #27c997);
+  border-color: #34e2ac;
+  color: #052016;
+}
+
+.btn.ghost {
+  background: rgba(7, 12, 23, 0.30);
+}
+
+.kframe-card,
+.style-card,
+.style-thumb-tools,
+.history-item {
+  background: rgba(10, 17, 30, 0.62);
+  border-color: var(--line-soft);
+}
+
+pre,
+.contact-sheet {
+  background: rgba(6, 12, 22, 0.78);
+  border-color: var(--line-soft);
+}
+
+.history-memo a {
+  color: #89c8ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.history-memo a:hover {
+  color: #a1d7ff;
 }
