@@ -21,7 +21,6 @@ const GOOGLE_KR_FONT_MAP = {
   noto_sans_kr: "\"Noto Sans KR\", \"Pretendard Variable\", \"SUIT\", sans-serif",
   nanum_gothic: "\"Nanum Gothic\", \"Noto Sans KR\", sans-serif",
   nanum_myeongjo: "\"Nanum Myeongjo\", \"Noto Serif KR\", serif",
-  black_han_sans: "\"Black Han Sans\", \"Noto Sans KR\", sans-serif",
   do_hyeon: "\"Do Hyeon\", \"Noto Sans KR\", sans-serif",
   jua: "\"Jua\", \"Noto Sans KR\", sans-serif",
   gothic_a1: "\"Gothic A1\", \"Noto Sans KR\", sans-serif",
@@ -87,6 +86,7 @@ const el = {
   progressPanel: document.getElementById("progressPanel"),
   statusMessage: document.getElementById("statusMessage"),
   progressBar: document.getElementById("progressBar"),
+  terminalLog: document.getElementById("terminalLog"),
   resultSection: document.getElementById("resultSection"),
   mvSynopsisPanel: document.getElementById("mvSynopsisPanel"),
   mvSynopsisText: document.getElementById("mvSynopsisText"),
@@ -103,7 +103,6 @@ const el = {
   appTwoCol: document.getElementById("appTwoCol"),
   historyPanel: document.getElementById("historyPanel"),
   colResizer: document.getElementById("colResizer"),
-  columnRatioRange: document.getElementById("columnRatioRange"),
   apiKeyInput: document.getElementById("apiKeyInput"),
   geminiLamp: document.getElementById("geminiLamp"),
   geminiStatusText: document.getElementById("geminiStatusText"),
@@ -126,7 +125,9 @@ const appState = {
   scriptFontSize: loadScriptFontSize(),
   scriptInputHeight: loadScriptInputHeight(),
   globalFontKey: loadGlobalFontKey(),
-  activeGeminiModel: loadGeminiActiveModel()
+  activeGeminiModel: loadGeminiActiveModel(),
+  terminalLogs: [],
+  lastGeminiStatusText: ""
 };
 
 function safeStorageGet(key) {
@@ -180,7 +181,6 @@ function saveColumnRatio(value) {
 function applyColumnRatio(value, persist = true) {
   const ratio = Math.max(18, Math.min(55, Number(value) || 28));
   document.documentElement.style.setProperty("--left-col-pct", `${ratio}%`);
-  if (el.columnRatioRange) el.columnRatioRange.value = String(ratio);
   if (persist) saveColumnRatio(ratio);
 }
 
@@ -201,7 +201,7 @@ function setupColumnResizer() {
   const onUp = () => {
     if (!dragging) return;
     dragging = false;
-    saveColumnRatio(Number(el.columnRatioRange?.value || appState.leftColRatio));
+    saveColumnRatio(appState.leftColRatio);
     document.body.style.cursor = "";
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("mouseup", onUp);
@@ -211,7 +211,7 @@ function setupColumnResizer() {
     if (window.matchMedia("(max-width: 900px)").matches) return;
     dragging = true;
     startX = event.clientX;
-    startRatio = Number(el.columnRatioRange?.value || appState.leftColRatio || 28);
+    startRatio = appState.leftColRatio || 28;
     document.body.style.cursor = "col-resize";
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -279,19 +279,40 @@ function applyGlobalFont(fontKey, persist = true) {
   if (persist) safeStorageSet(GLOBAL_FONT_STORAGE, key);
 }
 
-window.addEventListener("error", (event) => {
-  if (el.statusMessage) {
-    el.statusMessage.textContent = `오류: ${event.message || "알 수 없는 오류"}`;
+function appendTerminalLog(level, message) {
+  if (!el.terminalLog) return;
+  const lv = String(level || "INFO").toUpperCase();
+  const msg = String(message || "").trim();
+  if (!msg) return;
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  const ss = String(now.getSeconds()).padStart(2, "0");
+  const line = `[${hh}:${mm}:${ss}] [${lv}] ${msg}`;
+  appState.terminalLogs.push(line);
+  if (appState.terminalLogs.length > 120) {
+    appState.terminalLogs = appState.terminalLogs.slice(-120);
   }
+  el.terminalLog.textContent = appState.terminalLogs.join("\n");
+  el.terminalLog.scrollTop = el.terminalLog.scrollHeight;
+}
+
+function setStatusMessage(message, { level = "INFO", resetProgress = false } = {}) {
+  const text = String(message || "");
+  if (el.statusMessage) el.statusMessage.textContent = text;
+  if (resetProgress && el.progressBar) el.progressBar.style.width = "0%";
+  appendTerminalLog(level, text);
+}
+
+window.addEventListener("error", (event) => {
+  setStatusMessage(`오류: ${event.message || "알 수 없는 오류"}`, { level: "ERROR" });
   appState.isGenerating = false;
   if (el.generateBtn) el.generateBtn.disabled = false;
 });
 
 window.addEventListener("unhandledrejection", (event) => {
   const message = event?.reason?.message || String(event?.reason || "알 수 없는 오류");
-  if (el.statusMessage) {
-    el.statusMessage.textContent = `오류: ${message}`;
-  }
+  setStatusMessage(`오류: ${message}`, { level: "ERROR" });
   appState.isGenerating = false;
   if (el.generateBtn) el.generateBtn.disabled = false;
 });
@@ -390,13 +411,7 @@ function init() {
         syncLiveScriptEditorToJson();
       });
     }
-    if (el.columnRatioRange) {
-      el.columnRatioRange.addEventListener("input", () => {
-        applyColumnRatio(Number(el.columnRatioRange.value || 28), true);
-      });
-    }
     setupColumnResizer();
-
     const savedKey = safeStorageGet(API_KEY_STORAGE);
     if (savedKey && el.apiKeyInput) el.apiKeyInput.value = savedKey;
     renderCurrentGeminiModelLabel();
@@ -417,6 +432,7 @@ function init() {
     applyScriptInputHeight(appState.scriptInputHeight, false);
     applyGlobalFont(appState.globalFontKey, false);
     notifyGenerateBlocked("대기 중");
+    appendTerminalLog("INFO", "앱 초기화 완료");
   } catch (e) {
     notifyGenerateBlocked(`초기화 오류: ${e?.message || "알 수 없음"}`);
   } finally {
@@ -644,11 +660,12 @@ async function onGenerate() {
   };
 
   if (inputMode === "script") {
-    setScriptInputCollapsed(true);
+    setScriptInputCollapsed(false);
   }
 
   appState.isGenerating = true;
   el.generateBtn.disabled = true;
+  appendTerminalLog("INFO", `생성 시작 | mode=${inputMode} | runtime=${runtime} | KF=${kfCount}`);
 
   try {
     el.progressBar.style.width = "0%";
@@ -676,6 +693,7 @@ async function onGenerate() {
       scriptAnalysis,
       musicAnalysis
     });
+    setStatusMessage("JSON 출력 중...", { level: "STEP" });
     const enriched = await maybeEnhanceResultTextWithGemini(result);
     appState.lastResult = enriched;
 
@@ -683,6 +701,8 @@ async function onGenerate() {
     saveHistory(enriched);
     saveCurrentTabState();
     renderHistory();
+    setStatusMessage("생성 완료", { level: "OK" });
+    appendTerminalLog("OK", `생성 완료 | project=${enriched?.meta?.project_id || "-"}`);
   } catch (e) {
     const message = e?.message || "알 수 없는 생성 오류";
     notifyGenerateBlocked(`생성 오류: ${message}`);
@@ -755,6 +775,7 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
   appState.isGenerating = true;
   if (el.generateMusicKfBtn) el.generateMusicKfBtn.disabled = true;
   if (el.generateMusicJsonBtn) el.generateMusicJsonBtn.disabled = true;
+  appendTerminalLog("INFO", `뮤직비디오 생성 시작 | KF=${generateKf ? "on" : "off"} | JSON=${generateJson ? "on" : "off"}`);
   try {
     el.progressBar.style.width = "0%";
     await simulateProgress(settings.generate_contact_sheet, settings.generate_keyframes);
@@ -777,12 +798,15 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
       scriptAnalysis,
       musicAnalysis
     });
+    setStatusMessage("JSON 출력 중...", { level: "STEP" });
     const enriched = await maybeEnhanceResultTextWithGemini(result);
     appState.lastResult = enriched;
     renderResult(enriched, { showKf: !!generateKf, showJson: !!generateJson });
     saveHistory(enriched);
     saveCurrentTabState();
     renderHistory();
+    setStatusMessage("생성 완료", { level: "OK" });
+    appendTerminalLog("OK", `뮤직비디오 생성 완료 | project=${enriched?.meta?.project_id || "-"}`);
   } catch (e) {
     notifyGenerateBlocked(`생성 오류: ${e?.message || "알 수 없는 오류"}`);
   } finally {
@@ -793,12 +817,8 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
 }
 
 function notifyGenerateBlocked(message) {
-  if (el.statusMessage) {
-    el.statusMessage.textContent = message;
-  }
-  if (el.progressBar) {
-    el.progressBar.style.width = "0%";
-  }
+  const level = /오류|실패/i.test(String(message || "")) ? "ERROR" : "INFO";
+  setStatusMessage(message, { level, resetProgress: true });
 }
 
 async function simulateProgress(withContactSheet, withKeyframes = true) {
@@ -820,7 +840,7 @@ async function simulateProgress(withContactSheet, withKeyframes = true) {
 
   let current = 0;
   for (const stage of stages) {
-    el.statusMessage.textContent = stage.label;
+    setStatusMessage(stage.label, { level: "STEP" });
     while (current < stage.target) {
       current += 2;
       el.progressBar.style.width = `${Math.min(current, 100)}%`;
@@ -1566,6 +1586,10 @@ function setGeminiLampStatus(status, detail = "") {
 
   el.geminiLamp.classList.add(lampClass);
   el.geminiStatusText.textContent = statusText;
+  if (appState.lastGeminiStatusText !== statusText) {
+    appState.lastGeminiStatusText = statusText;
+    appendTerminalLog(status === "error" ? "ERROR" : status === "ok" ? "OK" : "INFO", statusText);
+  }
 }
 
 async function geminiGenerateText({ prompt, inlineImageDataUrl = "" }) {
@@ -1773,7 +1797,7 @@ function resetAll() {
   if (el.keyframesToggle) el.keyframesToggle.checked = false;
   el.contactSheetToggle.checked = false;
   el.progressBar.style.width = "0%";
-  el.statusMessage.textContent = "대기 중";
+  setStatusMessage("대기 중", { level: "INFO" });
   el.resultSection.classList.add("hidden");
   appState.lastResult = null;
   appState.tabStates = createInitialTabStates();
@@ -1790,7 +1814,7 @@ function resetResultState() {
   el.generateBtn.disabled = false;
   el.resultSection.classList.add("hidden");
   el.progressBar.style.width = "0%";
-  el.statusMessage.textContent = "대기 중";
+  setStatusMessage("대기 중", { level: "INFO" });
   el.kframeMeta.textContent = "";
   el.keyframeList.innerHTML = "";
   el.liveScriptEditor.value = "";
