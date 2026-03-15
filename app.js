@@ -9,8 +9,10 @@ const SCRIPT_FONT_SIZE_STORAGE = "sora_script_font_size_v1";
 const SCRIPT_HEIGHT_STORAGE = "sora_script_input_height_v1";
 const SCRIPT_HEIGHT_STEPS = [280, 360, 460, 580, 720];
 const GLOBAL_FONT_STORAGE = "sora_global_font_v1";
-const APP_VERSION = "1.6";
+const APP_VERSION = "1.7";
 const OPEN_SOURCE_REPO = "redbear7/sora-json-prompt-app";
+const OSS_VERSION_CACHE_KEY = "sora_oss_latest_version_cache_v1";
+const OSS_VERSION_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
 const GEMINI_TEXT_MODEL = "gemini-3.0-flash";
 const GEMINI_MODEL_STORAGE = "sora_gemini_active_model_v1";
 const GEMINI_FALLBACK_MODELS = [
@@ -371,13 +373,54 @@ async function fetchLatestOpenSourceVersion() {
   }
 }
 
+function loadOssVersionCache() {
+  try {
+    const raw = safeStorageGet(OSS_VERSION_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const version = String(parsed.version || "").trim();
+    const checkedAt = Number(parsed.checkedAt || 0);
+    if (!version || !Number.isFinite(checkedAt)) return null;
+    return { version, checkedAt };
+  } catch (_e) {
+    return null;
+  }
+}
+
+function saveOssVersionCache(version) {
+  const payload = {
+    version: String(version || "").trim(),
+    checkedAt: Date.now()
+  };
+  safeStorageSet(OSS_VERSION_CACHE_KEY, JSON.stringify(payload));
+}
+
 async function checkOpenSourceLatestVersion() {
+  if (!isLocalExecution()) return;
+  const cached = loadOssVersionCache();
+  if (cached && Date.now() - cached.checkedAt <= OSS_VERSION_CACHE_TTL_MS) {
+    const cmpCached = compareVersions(APP_VERSION, cached.version);
+    if (cmpCached < 0) {
+      appendTerminalLog("WARN", `업데이트 가능(캐시): 현재 v${APP_VERSION} / 최신 ${cached.version}`);
+    } else {
+      appendTerminalLog("INFO", `최신 버전 확인(캐시): v${APP_VERSION}`);
+    }
+    return;
+  }
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    appendTerminalLog("INFO", "오프라인 상태로 최신 버전 확인을 건너뜀");
+    return;
+  }
+
   appendTerminalLog("INFO", `오픈소스 최신 버전 확인 중... (${OPEN_SOURCE_REPO})`);
   const latest = await fetchLatestOpenSourceVersion();
   if (!latest) {
-    appendTerminalLog("WARN", "오픈소스 최신 버전 확인 실패 (네트워크/권한 문제 가능)");
+    appendTerminalLog("INFO", "최신 버전 확인 실패 (네트워크/레이트리밋 가능)");
     return;
   }
+  saveOssVersionCache(latest);
   const cmp = compareVersions(APP_VERSION, latest);
   if (cmp < 0) {
     appendTerminalLog("WARN", `업데이트 가능: 현재 v${APP_VERSION} / 최신 ${latest}`);
@@ -515,7 +558,6 @@ function init() {
     applyGlobalFont(appState.globalFontKey, false);
     notifyGenerateBlocked("대기 중");
     appendTerminalLog("INFO", "앱 초기화 완료");
-    void checkOpenSourceLatestVersion();
   } catch (e) {
     notifyGenerateBlocked(`초기화 오류: ${e?.message || "알 수 없음"}`);
   } finally {
@@ -996,7 +1038,7 @@ function buildResult({ inputMode, scriptText, memoText, soraLinkText, musicLyric
 
   const result = {
     meta: {
-      version: "1.6",
+      version: "1.7",
       project_id: `proj_${now.getTime()}`,
       created_at: now.toISOString(),
       text_model: getSavedGeminiApiKey() ? getCurrentGeminiModel() : "local-fallback",
@@ -1643,6 +1685,12 @@ function renderAccessPathInfo() {
   const isLocal = proto === "file:" || /^localhost(?::\d+)?$/i.test(host) || /^127\.0\.0\.1(?::\d+)?$/.test(host);
   const mode = isLocal ? "로컬(Local)" : "홈페이지(Web)";
   el.accessPathInfo.textContent = `접속: ${mode} | ${href}`;
+}
+
+function isLocalExecution() {
+  const proto = window.location.protocol || "";
+  const host = window.location.host || "";
+  return proto === "file:" || /^localhost(?::\d+)?$/i.test(host) || /^127\.0\.0\.1(?::\d+)?$/.test(host);
 }
 
 function setGeminiLampStatus(status, detail = "") {
