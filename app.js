@@ -824,6 +824,11 @@ async function onGenerate() {
     saveHistory(enriched);
     saveCurrentTabState();
     renderHistory();
+    try {
+      await copyJsonToClipboard(enriched, { logSource: "자동 복사" });
+    } catch (_e) {
+      appendTerminalLog("WARN", "자동 복사 실패 | 브라우저 클립보드 권한 확인 필요");
+    }
     setStatusMessage("생성 완료", { level: "OK" });
     appendTerminalLog("OK", `생성 완료 | project=${enriched?.meta?.project_id || "-"}`);
   } catch (e) {
@@ -928,6 +933,11 @@ async function generateMusicVideoCode({ generateKf, generateJson }) {
     saveHistory(enriched);
     saveCurrentTabState();
     renderHistory();
+    try {
+      await copyJsonToClipboard(enriched, { logSource: "자동 복사" });
+    } catch (_e) {
+      appendTerminalLog("WARN", "자동 복사 실패 | 브라우저 클립보드 권한 확인 필요");
+    }
     setStatusMessage("생성 완료", { level: "OK" });
     appendTerminalLog("OK", `뮤직비디오 생성 완료 | project=${enriched?.meta?.project_id || "-"}`);
   } catch (e) {
@@ -1341,14 +1351,22 @@ function renderMusicSynopsisOnly(synopsis, lyricsText) {
 async function onCopyJson() {
   if (!appState.lastResult) return;
   try {
-    await navigator.clipboard.writeText(JSON.stringify(appState.lastResult, null, 2));
-    setCopyButtonState(true);
-    appState.lastResult.ui_state.copy_button = "COPIED!";
-    appState.lastResult.ui_state.copy_success = true;
-    setTimeout(() => setCopyButtonState(false), 1000);
+    await copyJsonToClipboard(appState.lastResult, { logSource: "수동 복사" });
   } catch (_e) {
     alert("복사에 실패했습니다. 브라우저 권한을 확인하세요.");
   }
+}
+
+async function copyJsonToClipboard(result, { logSource = "자동 복사" } = {}) {
+  if (!result) return false;
+  await navigator.clipboard.writeText(JSON.stringify(result, null, 2));
+  setCopyButtonState(true);
+  if (!result.ui_state) result.ui_state = {};
+  result.ui_state.copy_button = "COPIED!";
+  result.ui_state.copy_success = true;
+  appendTerminalLog("OK", `${logSource} | JSON 클립보드 복사 완료`);
+  setTimeout(() => setCopyButtonState(false), 1000);
+  return true;
 }
 
 async function onCopyAllKfPrompts() {
