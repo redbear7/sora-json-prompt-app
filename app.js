@@ -9,7 +9,7 @@ const SCRIPT_FONT_SIZE_STORAGE = "sora_script_font_size_v1";
 const SCRIPT_HEIGHT_STORAGE = "sora_script_input_height_v1";
 const SCRIPT_HEIGHT_STEPS = [280, 360, 460, 580, 720];
 const GLOBAL_FONT_STORAGE = "sora_global_font_v1";
-const APP_VERSION = "1.7";
+const APP_VERSION = "1.8";
 const OPEN_SOURCE_REPO = "redbear7/sora-json-prompt-app";
 const OSS_VERSION_CACHE_KEY = "sora_oss_latest_version_cache_v1";
 const OSS_VERSION_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
@@ -1048,7 +1048,7 @@ function buildResult({ inputMode, scriptText, memoText, soraLinkText, musicLyric
 
   const result = {
     meta: {
-      version: "1.7",
+      version: "1.8",
       project_id: `proj_${now.getTime()}`,
       created_at: now.toISOString(),
       text_model: getSavedGeminiApiKey() ? getCurrentGeminiModel() : "local-fallback",
