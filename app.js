@@ -447,6 +447,7 @@ function init() {
     if (el.scriptTab) el.scriptTab.addEventListener("click", resetToIdleMode);
     if (el.referenceTab) el.referenceTab.addEventListener("click", () => onTabClick("reference"));
     if (el.appTitle) el.appTitle.addEventListener("click", resetToIdleMode);
+    window.addEventListener("keydown", onGlobalShortcut);
     if (el.scriptInput) {
       el.scriptInput.addEventListener("input", () => {
         sanitizeScriptInputInPlace();
@@ -569,6 +570,15 @@ function init() {
         el.historyList.innerHTML = "<p>히스토리 표시 중 오류가 발생했습니다.</p>";
       }
     }
+  }
+}
+
+function onGlobalShortcut(event) {
+  if (!event) return;
+  if (event.ctrlKey && !event.metaKey && !event.altKey && String(event.key || "") === "1") {
+    event.preventDefault();
+    resetToIdleMode();
+    appendTerminalLog("INFO", "단축키 실행 | Script 초기화 (Ctrl+1)");
   }
 }
 
