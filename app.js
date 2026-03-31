@@ -1262,11 +1262,12 @@ function makeFrame(n, total, durationSec, sourceSegment, refContext = {}) {
     : sourceSegment?.actor_id
       ? [sourceSegment.actor_id]
       : [];
-  const actorProfiles = Array.isArray(sourceSegment?.actor_profiles)
+  const actorProfilesRaw = Array.isArray(sourceSegment?.actor_profiles)
     ? sourceSegment.actor_profiles.filter(Boolean)
     : sourceSegment?.actor_profile
       ? [sourceSegment.actor_profile]
       : [];
+  const actorProfiles = actorProfilesRaw.map(normalizeActorProfile);
 
   return {
     frame_number: n,
@@ -1284,6 +1285,7 @@ function makeFrame(n, total, durationSec, sourceSegment, refContext = {}) {
       ? normalizeSourceTextByType(sourceSegment.raw, sourceSegment.type)
       : "",
     source_type: sourceSegment ? sourceSegment.type : "generated",
+    source_language_ko: sourceSegment?.type === "dialogue" ? "한국어" : "",
     lyric_text_ko: sourceSegment?.type === "lyric_pair"
       ? [sourceSegment?.lyric_line_1, sourceSegment?.lyric_line_2].filter(Boolean).join("\n")
       : "",
@@ -2340,15 +2342,19 @@ function getMusicDefaultActorProfiles(storyConfig) {
         actor_id: "ACTOR1",
         name_ko: "남자 주인공",
         role_ko: "남자 주인공",
+        nationality_ko: "한국인",
         gender_ko: "남성",
-        age_ko: "20대"
+        age_ko: "20대",
+        dialogue_language_ko: "한국어"
       },
       ACTOR2: {
         actor_id: "ACTOR2",
         name_ko: "여자 주인공",
         role_ko: "여자 주인공",
+        nationality_ko: "한국인",
         gender_ko: "여성",
-        age_ko: "20대"
+        age_ko: "20대",
+        dialogue_language_ko: "한국어"
       }
     };
   }
@@ -2357,8 +2363,10 @@ function getMusicDefaultActorProfiles(storyConfig) {
       actor_id: "ACTOR1",
       name_ko: "보컬",
       role_ko: "뮤직비디오 주인공",
+      nationality_ko: "한국인",
       gender_ko: "",
-      age_ko: ""
+      age_ko: "",
+      dialogue_language_ko: "한국어"
     }
   };
 }
@@ -3298,13 +3306,15 @@ function splitScriptSegments(text) {
         raw: content,
         type: classifySegmentType(content),
         actor_id: parsed.actorId,
-        actor_profile: {
+        actor_profile: normalizeActorProfile({
           actor_id: parsed.actorId,
           name_ko: parsed.nameKo,
           role_ko: parsed.roleKo,
+          nationality_ko: parsed.nationalityKo,
           gender_ko: parsed.genderKo,
-          age_ko: parsed.ageKo
-        },
+          age_ko: parsed.ageKo,
+          dialogue_language_ko: parsed.dialogueLanguageKo
+        }),
         source_line: line
       };
     })
@@ -3412,10 +3422,21 @@ function parseActorLine(line) {
   let roleKo = "";
   let ageKo = "";
   let nameKo = "";
+  let nationalityKo = "";
+  let dialogueLanguageKo = "";
 
   for (const part of parts) {
+    if (!dialogueLanguageKo && /(한국어|영어|일본어|중국어)/.test(part)) {
+      dialogueLanguageKo = part;
+      continue;
+    }
+    if (!nationalityKo && /(한국인|외국인|미국인|일본인|중국인|영국인)/.test(part)) {
+      const nationalityMatch = part.match(/(한국인|외국인|미국인|일본인|중국인|영국인)/);
+      nationalityKo = nationalityMatch ? nationalityMatch[1] : "";
+    }
     if (!genderKo && /(남성|여성|남자|여자)/.test(part)) {
-      genderKo = part;
+      const genderMatch = part.match(/(남성|여성|남자|여자)/);
+      genderKo = genderMatch ? genderMatch[1] : "";
       continue;
     }
     if (!ageKo && /(대|살|초반|중반|후반)/.test(part)) {
@@ -3431,7 +3452,15 @@ function parseActorLine(line) {
     }
   }
 
-  return { actorId, nameKo, roleKo, genderKo, ageKo };
+  return {
+    actorId,
+    nameKo,
+    roleKo,
+    nationalityKo: nationalityKo || "한국인",
+    genderKo,
+    ageKo,
+    dialogueLanguageKo: dialogueLanguageKo || "한국어"
+  };
 }
 
 function buildCharacterMap(segments) {
@@ -3441,14 +3470,24 @@ function buildCharacterMap(segments) {
     const multi = Array.isArray(seg.actor_profiles) ? seg.actor_profiles : [];
 
     if (single?.actor_id && !map[single.actor_id]) {
-      map[single.actor_id] = single;
+      map[single.actor_id] = normalizeActorProfile(single);
     }
     multi.forEach((p) => {
       if (!p?.actor_id) return;
-      if (!map[p.actor_id]) map[p.actor_id] = p;
+      if (!map[p.actor_id]) map[p.actor_id] = normalizeActorProfile(p);
     });
   });
   return map;
+}
+
+function normalizeActorProfile(profile) {
+  if (!profile || typeof profile !== "object") return profile;
+  return {
+    ...profile,
+    nationality_ko: String(profile.nationality_ko || "").trim() || "한국인",
+    dialogue_language_ko: String(profile.dialogue_language_ko || "").trim() || "한국어",
+    gender_ko: String(profile.gender_ko || "").replace(/^(한국인|외국인|미국인|일본인|중국인|영국인)\s*/, "").trim()
+  };
 }
 
 function makeHistoryTitle(result) {
