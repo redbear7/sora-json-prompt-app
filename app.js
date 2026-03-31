@@ -575,11 +575,74 @@ function init() {
 
 function onGlobalShortcut(event) {
   if (!event) return;
-  if (event.ctrlKey && !event.metaKey && !event.altKey && String(event.key || "") === "1") {
+  if (event.isComposing) return;
+
+  const hasCtrlOnly = event.ctrlKey && !event.metaKey && !event.altKey;
+  const code = String(event.code || "");
+  const key = String(event.key || "");
+  const isDigit1 = code === "Digit1" || code === "Numpad1" || key === "1";
+  const isDigit2 = code === "Digit2" || code === "Numpad2" || key === "2";
+
+  if (hasCtrlOnly && isDigit1) {
     event.preventDefault();
-    resetToIdleMode();
-    appendTerminalLog("INFO", "단축키 실행 | Script 초기화 (Ctrl+1)");
+    void runCtrl1ShortcutFlow();
+    return;
   }
+
+  if (hasCtrlOnly && isDigit2) {
+    event.preventDefault();
+    if (appState.isGenerating) {
+      appendTerminalLog("INFO", "단축키 실행 | 이미 생성 중이어서 Ctrl+2 요청을 건너뜀");
+      return;
+    }
+    if (el.generateBtn?.disabled) {
+      appendTerminalLog("WARN", "단축키 실행 실패 | 제너레이트 버튼이 비활성화 상태입니다");
+      return;
+    }
+    appendTerminalLog("INFO", "단축키 실행 | 제너레이트 시작 (Ctrl+2)");
+    el.generateBtn?.click();
+  }
+}
+
+async function runCtrl1ShortcutFlow() {
+  appendTerminalLog("INFO", "단축키 실행 | Script 초기화 + 클립보드 붙여넣기 + 제너레이트 시작 (Ctrl+1)");
+  resetToIdleMode();
+
+  let clipboardText = "";
+  try {
+    clipboardText = String((await navigator.clipboard.readText()) || "");
+  } catch (_error) {
+    appendTerminalLog("WARN", "Ctrl+1 실패 | 클립보드 읽기 권한을 확인해 주세요");
+    return;
+  }
+
+  const nextText = sanitizeScriptNoise(clipboardText).trim();
+  if (!nextText) {
+    appendTerminalLog("WARN", "Ctrl+1 중단 | 클립보드에 붙여넣을 대본이 없습니다");
+    return;
+  }
+
+  if (el.scriptInput) {
+    el.scriptInput.value = nextText;
+    sanitizeScriptInputInPlace();
+    updateScriptMetrics();
+    autoGrowScriptInput();
+    setScriptInputCollapsed(false);
+    saveCurrentTabState();
+    el.scriptInput.focus();
+  }
+
+  if (appState.isGenerating) {
+    appendTerminalLog("INFO", "Ctrl+1 대기 | 이미 생성 중이라 자동 제너레이트를 건너뜀");
+    return;
+  }
+  if (el.generateBtn?.disabled) {
+    appendTerminalLog("WARN", "Ctrl+1 실패 | 제너레이트 버튼이 비활성화 상태입니다");
+    return;
+  }
+
+  appendTerminalLog("OK", "Ctrl+1 완료 | 클립보드 대본 입력 후 제너레이트 실행");
+  el.generateBtn?.click();
 }
 
 function setInputMode(mode) {
