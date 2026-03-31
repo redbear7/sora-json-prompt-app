@@ -13,10 +13,11 @@ const APP_VERSION = "1.9";
 const OPEN_SOURCE_REPO = "redbear7/sora-json-prompt-app";
 const OSS_VERSION_CACHE_KEY = "sora_oss_latest_version_cache_v1";
 const OSS_VERSION_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
-const GEMINI_TEXT_MODEL = "gemini-3.0-flash";
+const GEMINI_TEXT_MODEL = "gemini-3.1-flash-lite-preview";
 const GEMINI_MODEL_STORAGE = "sora_gemini_active_model_v1";
 const GEMINI_FALLBACK_MODELS = [
   GEMINI_TEXT_MODEL,
+  "gemini-3.0-flash",
   "gemini-2.5-flash",
   "gemini-2.0-flash"
 ];
